@@ -1,0 +1,81 @@
+{
+  "requirement_id": "R6",
+  "expected_ambiguities": [
+    "source_agency is not defined when the selected rank is held by more than one agency (tie).",
+    "It is not stated whether Fitch-style RD/D are eligible, and if so which Fitch-style symbol is returned for common rank 21."
+  ],
+  "test_cases": [
+    {
+      "id": "R6-TC01", "title": "Single eligible rating is used directly", "type": "positive", "priority": "high",
+      "preconditions": ["Issuer ISS-5001 rated only by MOODYS: A2"],
+      "steps": ["Compute the regulatory rating"],
+      "test_data": {"MOODYS": "A2"},
+      "expected_result": "regulatory_rank=6, regulatory_rating=A, source_agency=MOODYS, rule_applied=SINGLE.",
+      "covers": ["R6-AC2", "R6-AC6"]
+    },
+    {
+      "id": "R6-TC02", "title": "Two ratings: the lower one is used", "type": "positive", "priority": "high",
+      "preconditions": ["Issuer ISS-5002: MOODYS A2, FITCH BBB+"],
+      "steps": ["Compute the regulatory rating"],
+      "test_data": {"MOODYS": "A2", "FITCH": "BBB+"},
+      "expected_result": "regulatory_rank=8, regulatory_rating=BBB+, source_agency=FITCH, rule_applied=LOWER_OF_TWO.",
+      "covers": ["R6-AC1", "R6-AC3", "R6-AC6"]
+    },
+    {
+      "id": "R6-TC03", "title": "Two ratings straddling the IG boundary", "type": "boundary", "priority": "high",
+      "preconditions": ["Issuer ISS-5003: MOODYS Baa3, FITCH BB+"],
+      "steps": ["Compute the regulatory rating"],
+      "test_data": {"MOODYS": "Baa3", "FITCH": "BB+"},
+      "expected_result": "regulatory_rank=11, regulatory_rating=BB+, source_agency=FITCH, rule_applied=LOWER_OF_TWO.",
+      "covers": ["R6-AC1", "R6-AC3"]
+    },
+    {
+      "id": "R6-TC04", "title": "Two equivalent ratings", "type": "edge", "priority": "medium",
+      "preconditions": ["Issuer ISS-5004: MOODYS Aa3, FITCH AA-"],
+      "steps": ["Compute the regulatory rating"],
+      "test_data": {"MOODYS": "Aa3", "FITCH": "AA-"},
+      "expected_result": "regulatory_rank=4, regulatory_rating=AA-, rule_applied=LOWER_OF_TWO (source_agency for ties is unspecified).",
+      "covers": ["R6-AC3"]
+    },
+    {
+      "id": "R6-TC05", "title": "Three ratings: second best is used", "type": "positive", "priority": "high",
+      "preconditions": ["Issuer ISS-5005: MOODYS Baa1, FITCH A-, NORTHBRIDGE BB+"],
+      "steps": ["Compute the regulatory rating"],
+      "test_data": {"MOODYS": "Baa1", "FITCH": "A-", "NORTHBRIDGE": "BB+"},
+      "expected_result": "Ranks are 8, 7, 11; the second best is rank 8. regulatory_rating=BBB+, source_agency=MOODYS, rule_applied=SECOND_BEST.",
+      "covers": ["R6-AC1", "R6-AC4", "R6-AC6"]
+    },
+    {
+      "id": "R6-TC06", "title": "Three ratings, all different, middle one selected", "type": "positive", "priority": "medium",
+      "preconditions": ["Issuer ISS-5006: MOODYS A1, FITCH BBB, NORTHBRIDGE BB"],
+      "steps": ["Compute the regulatory rating"],
+      "test_data": {"MOODYS": "A1", "FITCH": "BBB", "NORTHBRIDGE": "BB"},
+      "expected_result": "regulatory_rank=9, regulatory_rating=BBB, source_agency=FITCH, rule_applied=SECOND_BEST.",
+      "covers": ["R6-AC4"]
+    },
+    {
+      "id": "R6-TC07", "title": "Three ratings where the two best are equal", "type": "edge", "priority": "medium",
+      "preconditions": ["Issuer ISS-5007: MOODYS A2, FITCH AA, NORTHBRIDGE AA"],
+      "steps": ["Compute the regulatory rating"],
+      "test_data": {"MOODYS": "A2", "FITCH": "AA", "NORTHBRIDGE": "AA"},
+      "expected_result": "regulatory_rank=3, regulatory_rating=AA, rule_applied=SECOND_BEST (source_agency for ties is unspecified).",
+      "covers": ["R6-AC4"]
+    },
+    {
+      "id": "R6-TC08", "title": "Withdrawn and not-rated entries are excluded", "type": "edge", "priority": "high",
+      "preconditions": ["Issuer ISS-5008: MOODYS WR, FITCH BBB, NORTHBRIDGE NR"],
+      "steps": ["Compute the regulatory rating"],
+      "test_data": {"MOODYS": "WR", "FITCH": "BBB", "NORTHBRIDGE": "NR"},
+      "expected_result": "regulatory_rank=9, regulatory_rating=BBB, source_agency=FITCH, rule_applied=SINGLE.",
+      "covers": ["R6-AC5"]
+    },
+    {
+      "id": "R6-TC09", "title": "No eligible ratings gives UNRATED", "type": "negative", "priority": "high",
+      "preconditions": ["Issuer ISS-5009: MOODYS WR, FITCH WD, NORTHBRIDGE NR"],
+      "steps": ["Compute the regulatory rating"],
+      "test_data": {"MOODYS": "WR", "FITCH": "WD", "NORTHBRIDGE": "NR"},
+      "expected_result": "Result is UNRATED.",
+      "covers": ["R6-AC5"]
+    }
+  ]
+}

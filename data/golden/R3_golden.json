@@ -1,0 +1,81 @@
+{
+  "requirement_id": "R3",
+  "expected_ambiguities": [
+    "split_rated is not defined when one agency's entry is a status code (WR/WD/NR) and another is a rating.",
+    "split_rated is not defined for an issuer rated by three agencies with mixed grades (e.g. two IG, one SG)."
+  ],
+  "test_cases": [
+    {
+      "id": "R3-TC01", "title": "Classify the lowest investment-grade ratings as INVESTMENT_GRADE", "type": "boundary", "priority": "high",
+      "preconditions": [],
+      "steps": ["Classify Baa3 (MOODYS)", "Classify BBB- (FITCH)"],
+      "test_data": {"cases": [["MOODYS","Baa3"],["FITCH","BBB-"]]},
+      "expected_result": "Both are INVESTMENT_GRADE with in_default=false.",
+      "covers": ["R3-AC1"]
+    },
+    {
+      "id": "R3-TC02", "title": "Classify the highest speculative-grade ratings as SPECULATIVE_GRADE", "type": "boundary", "priority": "high",
+      "preconditions": [],
+      "steps": ["Classify Ba1 (MOODYS)", "Classify BB+ (FITCH)"],
+      "test_data": {"cases": [["MOODYS","Ba1"],["FITCH","BB+"]]},
+      "expected_result": "Both are SPECULATIVE_GRADE with in_default=false.",
+      "covers": ["R3-AC2"]
+    },
+    {
+      "id": "R3-TC03", "title": "Classify top ratings as INVESTMENT_GRADE", "type": "positive", "priority": "medium",
+      "preconditions": [],
+      "steps": ["Classify Aaa (MOODYS)", "Classify AAA (FITCH)", "Classify A2 (MOODYS)"],
+      "test_data": {"cases": [["MOODYS","Aaa"],["FITCH","AAA"],["MOODYS","A2"]]},
+      "expected_result": "All are INVESTMENT_GRADE.",
+      "covers": ["R3-AC1"]
+    },
+    {
+      "id": "R3-TC04", "title": "Classify low ratings as SPECULATIVE_GRADE", "type": "positive", "priority": "medium",
+      "preconditions": [],
+      "steps": ["Classify B2 (MOODYS)", "Classify CCC (FITCH)", "Classify C (MOODYS)"],
+      "test_data": {"cases": [["MOODYS","B2"],["FITCH","CCC"],["MOODYS","C"]]},
+      "expected_result": "All are SPECULATIVE_GRADE with in_default=false.",
+      "covers": ["R3-AC2", "R3-AC3"]
+    },
+    {
+      "id": "R3-TC05", "title": "Flag Fitch-style RD and D as in default", "type": "edge", "priority": "high",
+      "preconditions": [],
+      "steps": ["Classify RD (FITCH)", "Classify D (FITCH)"],
+      "test_data": {"cases": [["FITCH","RD"],["FITCH","D"]]},
+      "expected_result": "Both are SPECULATIVE_GRADE with in_default=true.",
+      "covers": ["R3-AC2", "R3-AC3"]
+    },
+    {
+      "id": "R3-TC06", "title": "Do not flag C as in default", "type": "edge", "priority": "medium",
+      "preconditions": [],
+      "steps": ["Classify C (FITCH)", "Classify C (MOODYS)"],
+      "test_data": {"cases": [["FITCH","C"],["MOODYS","C"]]},
+      "expected_result": "Both are SPECULATIVE_GRADE with in_default=false.",
+      "covers": ["R3-AC3"]
+    },
+    {
+      "id": "R3-TC07", "title": "Classify status codes as NOT_RATED", "type": "positive", "priority": "high",
+      "preconditions": [],
+      "steps": ["Classify WR (MOODYS), WD (FITCH) and NR (both agencies)"],
+      "test_data": {"cases": [["MOODYS","WR"],["FITCH","WD"],["MOODYS","NR"],["FITCH","NR"]]},
+      "expected_result": "All are NOT_RATED.",
+      "covers": ["R3-AC4"]
+    },
+    {
+      "id": "R3-TC08", "title": "Flag an issuer that straddles the IG boundary as split rated", "type": "edge", "priority": "high",
+      "preconditions": ["Issuer ISS-2001 rated Baa3 by MOODYS and BB+ by FITCH"],
+      "steps": ["Classify issuer ISS-2001"],
+      "test_data": {"issuer_id": "ISS-2001", "ratings": {"MOODYS": "Baa3", "FITCH": "BB+"}},
+      "expected_result": "split_rated=true.",
+      "covers": ["R3-AC5"]
+    },
+    {
+      "id": "R3-TC09", "title": "Do not flag an issuer whose ratings share a grade", "type": "positive", "priority": "medium",
+      "preconditions": ["Issuer ISS-2002 rated A2 by MOODYS and A by FITCH; issuer ISS-2003 rated B1 by MOODYS and B+ by FITCH"],
+      "steps": ["Classify ISS-2002", "Classify ISS-2003"],
+      "test_data": {"ISS-2002": {"MOODYS": "A2", "FITCH": "A"}, "ISS-2003": {"MOODYS": "B1", "FITCH": "B+"}},
+      "expected_result": "Both have split_rated=false.",
+      "covers": ["R3-AC5"]
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "requirement_id": "R5",
+  "expected_ambiguities": [
+    "Behaviour is not specified when a single request sets both an outlook and a watch.",
+    "It is not stated whether aged_watch is computed against the watch start date or the last review date."
+  ],
+  "test_cases": [
+    {
+      "id": "R5-TC01", "title": "Set each valid outlook value", "type": "positive", "priority": "high",
+      "preconditions": ["Issuer ISS-4001 has active MOODYS rating A3 with no watch"],
+      "steps": ["Set outlook to POSITIVE, NEGATIVE, STABLE and DEVELOPING in turn"],
+      "test_data": {"values": ["POSITIVE","NEGATIVE","STABLE","DEVELOPING"]},
+      "expected_result": "Each value is accepted and stored.",
+      "covers": ["R5-AC1"]
+    },
+    {
+      "id": "R5-TC02", "title": "Reject an invalid outlook value", "type": "negative", "priority": "medium",
+      "preconditions": ["Issuer ISS-4001 has active MOODYS rating A3"],
+      "steps": ["Set outlook to NEUTRAL", "Set outlook to lowercase 'stable'"],
+      "test_data": {"values": ["NEUTRAL", "stable"]},
+      "expected_result": "Both are rejected with INVALID_OUTLOOK.",
+      "covers": ["R5-AC1"]
+    },
+    {
+      "id": "R5-TC03", "title": "Set each valid watch value", "type": "positive", "priority": "high",
+      "preconditions": ["Issuer ISS-4002 has active FITCH rating BBB with outlook STABLE"],
+      "steps": ["Set watch to WATCH_POSITIVE, WATCH_NEGATIVE and WATCH_DEVELOPING in turn"],
+      "test_data": {"values": ["WATCH_POSITIVE","WATCH_NEGATIVE","WATCH_DEVELOPING"]},
+      "expected_result": "Each value is accepted.",
+      "covers": ["R5-AC2"]
+    },
+    {
+      "id": "R5-TC04", "title": "Reject a watch without a direction", "type": "negative", "priority": "high",
+      "preconditions": ["Issuer ISS-4002 has active FITCH rating BBB"],
+      "steps": ["Set watch to 'WATCH'"],
+      "test_data": {"value": "WATCH"},
+      "expected_result": "Rejected with WATCH_DIRECTION_REQUIRED.",
+      "covers": ["R5-AC2"]
+    },
+    {
+      "id": "R5-TC05", "title": "Placing a rating on watch clears the outlook", "type": "positive", "priority": "high",
+      "preconditions": ["Issuer ISS-4003 has MOODYS rating Baa3 with outlook NEGATIVE"],
+      "steps": ["Set watch to WATCH_NEGATIVE", "Read the rating"],
+      "test_data": {},
+      "expected_result": "watch=WATCH_NEGATIVE and outlook is empty/null.",
+      "covers": ["R5-AC3"]
+    },
+    {
+      "id": "R5-TC06", "title": "Reject removing a watch without an outlook", "type": "negative", "priority": "high",
+      "preconditions": ["Issuer ISS-4003 is on WATCH_NEGATIVE with no outlook"],
+      "steps": ["Remove the watch without supplying an outlook"],
+      "test_data": {},
+      "expected_result": "Rejected with OUTLOOK_REQUIRED; watch remains WATCH_NEGATIVE.",
+      "covers": ["R5-AC3"]
+    },
+    {
+      "id": "R5-TC07", "title": "Remove a watch together with a new outlook", "type": "positive", "priority": "medium",
+      "preconditions": ["Issuer ISS-4003 is on WATCH_NEGATIVE"],
+      "steps": ["Remove the watch and set outlook STABLE in the same request"],
+      "test_data": {"outlook": "STABLE"},
+      "expected_result": "watch is cleared and outlook=STABLE.",
+      "covers": ["R5-AC3"]
+    },
+    {
+      "id": "R5-TC08", "title": "Reject outlook/watch on defaulted ratings and status codes", "type": "negative", "priority": "high",
+      "preconditions": ["Issuers with FITCH RD, FITCH D and MOODYS WR exist"],
+      "steps": ["Set outlook STABLE on the RD rating", "Set watch WATCH_POSITIVE on the D rating", "Set outlook POSITIVE on the WR entry"],
+      "test_data": {"cases": [["FITCH","RD","outlook"],["FITCH","D","watch"],["MOODYS","WR","outlook"]]},
+      "expected_result": "Each is rejected with NOT_APPLICABLE_FOR_STATUS.",
+      "covers": ["R5-AC4"]
+    },
+    {
+      "id": "R5-TC09", "title": "aged_watch flips after 90 days", "type": "boundary", "priority": "high",
+      "preconditions": ["Two ratings placed on watch 90 and 91 calendar days ago respectively"],
+      "steps": ["View both ratings"],
+      "test_data": {"watch_age_days": [90, 91]},
+      "expected_result": "90 days: aged_watch=false. 91 days: aged_watch=true.",
+      "covers": ["R5-AC5"]
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "requirement_id": "R8",
+  "expected_ambiguities": [
+    "Precedence is not specified when several errors apply (e.g. no token AND unknown issuer: 401 or 404?).",
+    "The OpenAPI schema requires new_rating for every action, but a WITHDRAW has no new rating.",
+    "No pagination or size limit is specified for the GET ratings response."
+  ],
+  "test_cases": [
+    {
+      "id": "R8-TC01", "title": "GET current ratings returns 200 with the full schema", "type": "positive", "priority": "high",
+      "preconditions": ["Issuer ISS-1002 has MOODYS and FITCH ratings", "Valid bearer token"],
+      "steps": ["GET /v1/issuers/ISS-1002/ratings"],
+      "test_data": {"issuerId": "ISS-1002"},
+      "expected_result": "200, Content-Type application/json; ratings has 2 items, each with agency, rating, outlook, watch, effective_date and grade.",
+      "covers": ["R8-AC1", "R8-AC6"]
+    },
+    {
+      "id": "R8-TC02", "title": "Filter ratings by agency", "type": "positive", "priority": "medium",
+      "preconditions": ["Issuer ISS-1002 has MOODYS and FITCH ratings"],
+      "steps": ["GET /v1/issuers/ISS-1002/ratings?agency=FITCH"],
+      "test_data": {"agency": "FITCH"},
+      "expected_result": "200 and only the FITCH rating is returned.",
+      "covers": ["R8-AC2"]
+    },
+    {
+      "id": "R8-TC03", "title": "Invalid agency filter returns 400", "type": "negative", "priority": "medium",
+      "preconditions": [],
+      "steps": ["GET /v1/issuers/ISS-1002/ratings?agency=SP", "GET /v1/issuers/ISS-1002/ratings?agency=fitch"],
+      "test_data": {"agency": ["SP", "fitch"]},
+      "expected_result": "400 with body {code: INVALID_AGENCY, message: <text>}.",
+      "covers": ["R8-AC2", "R8-AC6"]
+    },
+    {
+      "id": "R8-TC04", "title": "Unknown issuer returns 404", "type": "negative", "priority": "high",
+      "preconditions": ["Issuer ISS-9999 does not exist"],
+      "steps": ["GET /v1/issuers/ISS-9999/ratings"],
+      "test_data": {"issuerId": "ISS-9999"},
+      "expected_result": "404 with code ISSUER_NOT_FOUND.",
+      "covers": ["R8-AC3", "R8-AC6"]
+    },
+    {
+      "id": "R8-TC05", "title": "Missing or invalid token returns 401", "type": "negative", "priority": "high",
+      "preconditions": [],
+      "steps": ["GET ratings without an Authorization header", "GET ratings with an expired or garbage token"],
+      "test_data": {},
+      "expected_result": "401 for both, JSON error body.",
+      "covers": ["R8-AC4", "R8-AC6"]
+    },
+    {
+      "id": "R8-TC06", "title": "POST without ratings:write scope returns 403", "type": "negative", "priority": "high",
+      "preconditions": ["Token with read-only scope"],
+      "steps": ["POST a valid rating action for ISS-1002"],
+      "test_data": {"scope": "ratings:read"},
+      "expected_result": "403; no action is created.",
+      "covers": ["R8-AC4"]
+    },
+    {
+      "id": "R8-TC07", "title": "POST a valid downgrade returns 201 with notch_change", "type": "positive", "priority": "high",
+      "preconditions": ["Issuer ISS-1003 has MOODYS rating Baa2", "Token with ratings:write"],
+      "steps": ["POST {agency: MOODYS, action_type: DOWNGRADE, new_rating: Ba1, effective_date: today}"],
+      "test_data": {"previous": "Baa2", "new": "Ba1"},
+      "expected_result": "201; body includes action_id, previous_rating=Baa2, new_rating=Ba1, notch_change=-2, recorded_at.",
+      "covers": ["R8-AC5", "R8-AC6"]
+    },
+    {
+      "id": "R8-TC08", "title": "POST with a future effective date returns 422", "type": "negative", "priority": "high",
+      "preconditions": ["Token with ratings:write"],
+      "steps": ["POST an action with effective_date = today + 1 day"],
+      "test_data": {},
+      "expected_result": "422 with code FUTURE_EFFECTIVE_DATE.",
+      "covers": ["R8-AC5"]
+    },
+    {
+      "id": "R8-TC09", "title": "POST with an invalid or mismatched symbol returns 422", "type": "negative", "priority": "high",
+      "preconditions": ["Token with ratings:write"],
+      "steps": ["POST MOODYS action with new_rating 'Aa4'", "POST FITCH action with new_rating 'Baa3'"],
+      "test_data": {"cases": [["MOODYS","Aa4","INVALID_RATING_SYMBOL"],["FITCH","Baa3","RATING_SCALE_MISMATCH"]]},
+      "expected_result": "422 with INVALID_RATING_SYMBOL and RATING_SCALE_MISMATCH respectively.",
+      "covers": ["R8-AC5"]
+    },
+    {
+      "id": "R8-TC10", "title": "POST with action type not matching the change returns 422", "type": "negative", "priority": "medium",
+      "preconditions": ["Issuer ISS-1003 has MOODYS rating Baa2", "Token with ratings:write"],
+      "steps": ["POST UPGRADE with new_rating Baa3"],
+      "test_data": {},
+      "expected_result": "422 with code ACTION_TYPE_MISMATCH.",
+      "covers": ["R8-AC5"]
+    }
+  ]
+}

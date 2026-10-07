@@ -1,0 +1,237 @@
+{
+  "requirement_id": "R4",
+  "expected_ambiguities": [
+    "AC6: 'large downgrade' is not defined (number of notches? crossing the IG boundary?), and 'highlighted' does not say what happens.",
+    "notch_change is not defined for NEW and WITHDRAW actions.",
+    "It is not stated whether UPGRADE/DOWNGRADE/AFFIRM are allowed on a withdrawn rating."
+  ],
+  "untestable_acs": {
+    "R4-AC6": "'Large downgrade' and 'highlighted' are undefined; the agent should raise a clarification question instead of inventing a threshold."
+  },
+  "test_cases": [
+    {
+      "id": "R4-TC01",
+      "title": "Record a downgrade across the IG boundary with correct notch_change",
+      "type": "positive",
+      "priority": "high",
+      "preconditions": [
+        "Issuer ISS-3001 has active FITCH rating BBB"
+      ],
+      "steps": [
+        "Submit DOWNGRADE to BB+ with effective_date = today"
+      ],
+      "test_data": {
+        "agency": "FITCH",
+        "previous": "BBB",
+        "new": "BB+"
+      },
+      "expected_result": "Action recorded with notch_change = -2.",
+      "covers": [
+        "R4-AC1",
+        "R4-AC2",
+        "R4-AC3"
+      ]
+    },
+    {
+      "id": "R4-TC02",
+      "title": "Record an affirmation with notch_change 0",
+      "type": "positive",
+      "priority": "medium",
+      "preconditions": [
+        "Issuer ISS-3002 has active MOODYS rating Baa2"
+      ],
+      "steps": [
+        "Submit AFFIRM with new_rating Baa2"
+      ],
+      "test_data": {
+        "agency": "MOODYS",
+        "previous": "Baa2",
+        "new": "Baa2"
+      },
+      "expected_result": "Action recorded with notch_change = 0.",
+      "covers": [
+        "R4-AC1",
+        "R4-AC2",
+        "R4-AC3"
+      ]
+    },
+    {
+      "id": "R4-TC03",
+      "title": "Reject UPGRADE when the new rating is lower",
+      "type": "negative",
+      "priority": "high",
+      "preconditions": [
+        "Issuer ISS-3003 has active MOODYS rating A1"
+      ],
+      "steps": [
+        "Submit UPGRADE with new_rating A3"
+      ],
+      "test_data": {
+        "agency": "MOODYS",
+        "action_type": "UPGRADE",
+        "previous": "A1",
+        "new": "A3"
+      },
+      "expected_result": "Rejected with ACTION_TYPE_MISMATCH; rating unchanged.",
+      "covers": [
+        "R4-AC2"
+      ]
+    },
+    {
+      "id": "R4-TC04",
+      "title": "Reject DOWNGRADE when the new rating is higher, and AFFIRM when the rating changes",
+      "type": "negative",
+      "priority": "high",
+      "preconditions": [
+        "Issuer ISS-3004 has active FITCH rating BB"
+      ],
+      "steps": [
+        "Submit DOWNGRADE with new_rating BB+",
+        "Submit AFFIRM with new_rating BB-"
+      ],
+      "test_data": {
+        "agency": "FITCH",
+        "previous": "BB",
+        "cases": [
+          [
+            "DOWNGRADE",
+            "BB+"
+          ],
+          [
+            "AFFIRM",
+            "BB-"
+          ]
+        ]
+      },
+      "expected_result": "Both are rejected with ACTION_TYPE_MISMATCH.",
+      "covers": [
+        "R4-AC2"
+      ]
+    },
+    {
+      "id": "R4-TC05",
+      "title": "Calculate notch_change into Fitch-style default ratings",
+      "type": "edge",
+      "priority": "high",
+      "preconditions": [
+        "Issuer ISS-3005 has active FITCH rating CCC"
+      ],
+      "steps": [
+        "Submit DOWNGRADE to RD"
+      ],
+      "test_data": {
+        "agency": "FITCH",
+        "previous": "CCC",
+        "new": "RD"
+      },
+      "expected_result": "Action recorded with notch_change = -4 (CCC=18, RD=22).",
+      "covers": [
+        "R4-AC3"
+      ]
+    },
+    {
+      "id": "R4-TC06",
+      "title": "Calculate the maximum notch_change on the Moody's-style scale",
+      "type": "boundary",
+      "priority": "medium",
+      "preconditions": [
+        "Issuer ISS-3006 has active MOODYS rating Aaa"
+      ],
+      "steps": [
+        "Submit DOWNGRADE to C"
+      ],
+      "test_data": {
+        "agency": "MOODYS",
+        "previous": "Aaa",
+        "new": "C"
+      },
+      "expected_result": "Action recorded with notch_change = -20.",
+      "covers": [
+        "R4-AC3"
+      ]
+    },
+    {
+      "id": "R4-TC07",
+      "title": "Accept today's effective date and reject tomorrow's",
+      "type": "boundary",
+      "priority": "high",
+      "preconditions": [
+        "Issuer ISS-3007 has active MOODYS rating Ba1"
+      ],
+      "steps": [
+        "Submit UPGRADE to Baa3 with effective_date = today",
+        "Submit DOWNGRADE to Ba1 with effective_date = today + 1 day"
+      ],
+      "test_data": {
+        "agency": "MOODYS"
+      },
+      "expected_result": "The first is recorded (notch_change = +1). The second is rejected with FUTURE_EFFECTIVE_DATE.",
+      "covers": [
+        "R4-AC4"
+      ]
+    },
+    {
+      "id": "R4-TC08",
+      "title": "Reject NEW when an active rating already exists",
+      "type": "negative",
+      "priority": "high",
+      "preconditions": [
+        "Issuer ISS-3008 has active FITCH rating A"
+      ],
+      "steps": [
+        "Submit NEW with FITCH rating A+"
+      ],
+      "test_data": {
+        "agency": "FITCH",
+        "action_type": "NEW",
+        "new": "A+"
+      },
+      "expected_result": "Rejected with RATING_ALREADY_EXISTS.",
+      "covers": [
+        "R4-AC5"
+      ]
+    },
+    {
+      "id": "R4-TC09",
+      "title": "Create a NEW rating then WITHDRAW it",
+      "type": "positive",
+      "priority": "high",
+      "preconditions": [
+        "Issuer ISS-3009 has no MOODYS rating"
+      ],
+      "steps": [
+        "Submit NEW with MOODYS rating Baa1",
+        "Submit WITHDRAW for MOODYS",
+        "Read the rating status"
+      ],
+      "test_data": {
+        "agency": "MOODYS",
+        "new": "Baa1"
+      },
+      "expected_result": "NEW is recorded; after WITHDRAW the status is WR.",
+      "covers": [
+        "R4-AC1",
+        "R4-AC5"
+      ]
+    },
+    {
+      "id": "R4-TC10",
+      "title": "Withdraw a FITCH rating sets status WD",
+      "type": "positive",
+      "priority": "medium",
+      "preconditions": [
+        "Issuer ISS-3010 has active FITCH rating BB-"
+      ],
+      "steps": [
+        "Submit WITHDRAW for FITCH"
+      ],
+      "test_data": {
+        "agency": "FITCH"
+      },
+      "expected_result": "Rating status becomes WD.",
+      "covers": [
+        "R4-AC5"
+      ]
+    }
+  ]
+}

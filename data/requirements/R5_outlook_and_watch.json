@@ -1,0 +1,14 @@
+{
+  "id": "R5",
+  "title": "Outlook and Watch Status",
+  "component": "Rating Actions",
+  "user_story": "As a rating analyst, I want to set an outlook or watch status on a rating so that users know the likely direction of the rating.",
+  "acceptance_criteria": [
+    {"id": "R5-AC1", "text": "Valid outlook values are POSITIVE, NEGATIVE, STABLE and DEVELOPING. Any other value is rejected with INVALID_OUTLOOK."},
+    {"id": "R5-AC2", "text": "Valid watch values are WATCH_POSITIVE, WATCH_NEGATIVE and WATCH_DEVELOPING. A watch without a direction is rejected with WATCH_DIRECTION_REQUIRED."},
+    {"id": "R5-AC3", "text": "A rating has either an outlook or a watch, never both. Placing a rating on watch clears its outlook. Removing a watch requires an outlook in the same request, otherwise the request is rejected with OUTLOOK_REQUIRED."},
+    {"id": "R5-AC4", "text": "Ratings in default (Fitch-style RD, D) and status codes (WR, WD, NR) cannot have an outlook or watch; such requests are rejected with NOT_APPLICABLE_FOR_STATUS."},
+    {"id": "R5-AC5", "text": "A watch that has been active for more than 90 calendar days is shown with aged_watch=true."}
+  ],
+  "references": ["rating_rules.md", "error_codes.md"]
+}

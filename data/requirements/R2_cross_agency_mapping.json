@@ -1,0 +1,15 @@
+{
+  "id": "R2",
+  "title": "Cross-Agency Rating Mapping",
+  "component": "Rating Analytics",
+  "user_story": "As a credit risk analyst, I want to convert a rating between the Moody's-style and Fitch-style scales so that I can compare issuers rated by different agencies.",
+  "acceptance_criteria": [
+    {"id": "R2-AC1", "text": "Each Moody's-style symbol maps to exactly one Fitch-style symbol according to the cross-agency mapping table (e.g. Aaa<->AAA, Aa2<->AA, Baa3<->BBB-, Caa3<->CCC-, Ca<->CC, C<->C)."},
+    {"id": "R2-AC2", "text": "Mapping is symmetric for all symbols from AAA/Aaa down to C: converting a rating to the other scale and back returns the original symbol."},
+    {"id": "R2-AC3", "text": "Fitch-style RD and D map one-way to Moody's-style C, and the response sets lossy=true. For all other conversions lossy=false."},
+    {"id": "R2-AC4", "text": "Status codes (WR, WD, NR) cannot be mapped; the system returns error code NOT_MAPPABLE."},
+    {"id": "R2-AC5", "text": "Invalid input symbols are rejected with error code INVALID_RATING_SYMBOL, using the same validation as R1."},
+    {"id": "R2-AC6", "text": "The response includes source_agency, source_symbol, target_agency, target_symbol, lossy, and common_rank (1 = highest, 21 = lowest; equal to the Moody's-style ordinal position)."}
+  ],
+  "references": ["cross_agency_mapping.md", "rating_scales.md", "error_codes.md"]
+}

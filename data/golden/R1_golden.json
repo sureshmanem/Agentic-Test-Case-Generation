@@ -1,0 +1,89 @@
+{
+  "requirement_id": "R1",
+  "expected_ambiguities": [
+    "Error code is not specified when an agency-specific status code is submitted under the other agency (e.g. 'WD' for MOODYS or 'WR' for FITCH).",
+    "Validation rules for agency NORTHBRIDGE are not stated, although it uses Fitch-style symbols elsewhere."
+  ],
+  "test_cases": [
+    {
+      "id": "R1-TC01", "title": "Accept every Moody's-style long-term symbol", "type": "positive", "priority": "high",
+      "preconditions": ["Agency is MOODYS"],
+      "steps": ["Submit each of the 21 Moody's-style symbols from Aaa to C", "Check the validation result for each"],
+      "test_data": {"agency": "MOODYS", "symbols": ["Aaa","Aa1","Aa2","Aa3","A1","A2","A3","Baa1","Baa2","Baa3","Ba1","Ba2","Ba3","B1","B2","B3","Caa1","Caa2","Caa3","Ca","C"]},
+      "expected_result": "All 21 symbols are accepted and stored with is_rating=true.",
+      "covers": ["R1-AC1"]
+    },
+    {
+      "id": "R1-TC02", "title": "Accept every Fitch-style long-term symbol", "type": "positive", "priority": "high",
+      "preconditions": ["Agency is FITCH"],
+      "steps": ["Submit each of the 23 Fitch-style symbols from AAA to D", "Check the validation result for each"],
+      "test_data": {"agency": "FITCH", "symbols": ["AAA","AA+","AA","AA-","A+","A","A-","BBB+","BBB","BBB-","BB+","BB","BB-","B+","B","B-","CCC+","CCC","CCC-","CC","C","RD","D"]},
+      "expected_result": "All 23 symbols are accepted and stored with is_rating=true.",
+      "covers": ["R1-AC2"]
+    },
+    {
+      "id": "R1-TC03", "title": "Reject a Moody's-style symbol submitted for FITCH", "type": "negative", "priority": "high",
+      "preconditions": ["Agency is FITCH"],
+      "steps": ["Submit symbol 'Aa2' with agency FITCH"],
+      "test_data": {"agency": "FITCH", "symbol": "Aa2"},
+      "expected_result": "Rejected with RATING_SCALE_MISMATCH; nothing is stored.",
+      "covers": ["R1-AC3"]
+    },
+    {
+      "id": "R1-TC04", "title": "Reject a Fitch-style symbol submitted for MOODYS", "type": "negative", "priority": "high",
+      "preconditions": ["Agency is MOODYS"],
+      "steps": ["Submit symbol 'BBB-' with agency MOODYS"],
+      "test_data": {"agency": "MOODYS", "symbol": "BBB-"},
+      "expected_result": "Rejected with RATING_SCALE_MISMATCH; nothing is stored.",
+      "covers": ["R1-AC3"]
+    },
+    {
+      "id": "R1-TC05", "title": "Accept symbol 'C' for both agencies (shared symbol is not a mismatch)", "type": "edge", "priority": "medium",
+      "preconditions": [],
+      "steps": ["Submit 'C' with agency MOODYS", "Submit 'C' with agency FITCH"],
+      "test_data": {"cases": [{"agency": "MOODYS", "symbol": "C"}, {"agency": "FITCH", "symbol": "C"}]},
+      "expected_result": "Both are accepted; no RATING_SCALE_MISMATCH is raised.",
+      "covers": ["R1-AC1", "R1-AC2", "R1-AC3"]
+    },
+    {
+      "id": "R1-TC06", "title": "Trim surrounding whitespace before validation", "type": "edge", "priority": "medium",
+      "preconditions": ["Agency is MOODYS"],
+      "steps": ["Submit ' Baa3 ' (leading and trailing spaces)"],
+      "test_data": {"agency": "MOODYS", "symbol": " Baa3 "},
+      "expected_result": "Accepted and stored as 'Baa3'.",
+      "covers": ["R1-AC4"]
+    },
+    {
+      "id": "R1-TC07", "title": "Reject symbols with the wrong case", "type": "negative", "priority": "medium",
+      "preconditions": [],
+      "steps": ["Submit 'baa3' for MOODYS", "Submit 'bbb-' for FITCH"],
+      "test_data": {"cases": [{"agency": "MOODYS", "symbol": "baa3"}, {"agency": "FITCH", "symbol": "bbb-"}]},
+      "expected_result": "Both are rejected with INVALID_RATING_SYMBOL.",
+      "covers": ["R1-AC4", "R1-AC5"]
+    },
+    {
+      "id": "R1-TC08", "title": "Reject malformed and unknown symbols", "type": "negative", "priority": "high",
+      "preconditions": [],
+      "steps": ["Submit each malformed symbol under its nearest agency"],
+      "test_data": {"cases": [{"agency": "MOODYS", "symbol": "Aa4"}, {"agency": "MOODYS", "symbol": "Aaa1"}, {"agency": "FITCH", "symbol": "AAA+"}, {"agency": "FITCH", "symbol": "BBB--"}, {"agency": "FITCH", "symbol": "CC+"}]},
+      "expected_result": "Each is rejected with INVALID_RATING_SYMBOL.",
+      "covers": ["R1-AC5"]
+    },
+    {
+      "id": "R1-TC09", "title": "Reject empty and whitespace-only symbols", "type": "boundary", "priority": "medium",
+      "preconditions": [],
+      "steps": ["Submit '' for MOODYS", "Submit '   ' for FITCH"],
+      "test_data": {"cases": [{"agency": "MOODYS", "symbol": ""}, {"agency": "FITCH", "symbol": "   "}]},
+      "expected_result": "Both are rejected with INVALID_RATING_SYMBOL (a whitespace-only symbol is empty after trimming).",
+      "covers": ["R1-AC4", "R1-AC5"]
+    },
+    {
+      "id": "R1-TC10", "title": "Store status codes with is_rating=false", "type": "positive", "priority": "high",
+      "preconditions": [],
+      "steps": ["Submit WR and NR for MOODYS", "Submit WD and NR for FITCH", "Read back the stored records"],
+      "test_data": {"cases": [{"agency": "MOODYS", "symbol": "WR"}, {"agency": "MOODYS", "symbol": "NR"}, {"agency": "FITCH", "symbol": "WD"}, {"agency": "FITCH", "symbol": "NR"}]},
+      "expected_result": "All four are accepted and stored with is_rating=false.",
+      "covers": ["R1-AC6"]
+    }
+  ]
+}

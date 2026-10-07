@@ -1,0 +1,81 @@
+{
+  "requirement_id": "R7",
+  "expected_ambiguities": [
+    "'10 years' is not defined precisely (calendar years vs. 3650/3652 days); golden tests assume calendar years.",
+    "The error returned when someone attempts to modify or delete an existing history record is not specified."
+  ],
+  "test_cases": [
+    {
+      "id": "R7-TC01", "title": "Return actions within the date range with all fields", "type": "positive", "priority": "high",
+      "preconditions": ["Issuer ISS-6001 has actions on 2024-02-10, 2024-06-15 and 2025-01-20"],
+      "steps": ["Query history from 2024-01-01 to 2024-12-31"],
+      "test_data": {"issuer_id": "ISS-6001", "from_date": "2024-01-01", "to_date": "2024-12-31"},
+      "expected_result": "Returns the 2024-06-15 and 2024-02-10 actions; each has action_id, action_type, agency, previous_rating, new_rating, notch_change, effective_date, analyst_id, recorded_at.",
+      "covers": ["R7-AC1", "R7-AC5"]
+    },
+    {
+      "id": "R7-TC02", "title": "Both range dates are inclusive", "type": "boundary", "priority": "high",
+      "preconditions": ["Issuer ISS-6002 has actions on 2024-02-29, 2024-03-01, 2024-03-31 and 2024-04-01"],
+      "steps": ["Query history from 2024-03-01 to 2024-03-31", "Query history from 2024-03-01 to 2024-03-01"],
+      "test_data": {"issuer_id": "ISS-6002"},
+      "expected_result": "The first query returns the 2024-03-31 and 2024-03-01 actions only. The single-day query returns only 2024-03-01.",
+      "covers": ["R7-AC1"]
+    },
+    {
+      "id": "R7-TC03", "title": "Sort by effective_date desc, then recorded_at desc", "type": "positive", "priority": "medium",
+      "preconditions": ["Issuer ISS-6003 has two actions effective 2024-05-01 (recorded 09:00 and 15:00) and one effective 2024-06-01"],
+      "steps": ["Query history covering May-June 2024"],
+      "test_data": {"issuer_id": "ISS-6003"},
+      "expected_result": "Order is: 2024-06-01, 2024-05-01 (15:00), 2024-05-01 (09:00).",
+      "covers": ["R7-AC2"]
+    },
+    {
+      "id": "R7-TC04", "title": "Reject from_date after to_date", "type": "negative", "priority": "high",
+      "preconditions": ["Issuer ISS-6001 exists"],
+      "steps": ["Query history from 2024-12-31 to 2024-01-01"],
+      "test_data": {"from_date": "2024-12-31", "to_date": "2024-01-01"},
+      "expected_result": "Rejected with INVALID_DATE_RANGE.",
+      "covers": ["R7-AC3"]
+    },
+    {
+      "id": "R7-TC05", "title": "Accept exactly 10 years, reject 10 years plus one day", "type": "boundary", "priority": "high",
+      "preconditions": ["Issuer ISS-6001 exists"],
+      "steps": ["Query 2015-01-01 to 2025-01-01", "Query 2015-01-01 to 2025-01-02"],
+      "test_data": {},
+      "expected_result": "The first query succeeds. The second is rejected with DATE_RANGE_TOO_LARGE.",
+      "covers": ["R7-AC3"]
+    },
+    {
+      "id": "R7-TC06", "title": "Unknown issuer returns ISSUER_NOT_FOUND", "type": "negative", "priority": "high",
+      "preconditions": ["Issuer ISS-9999 does not exist"],
+      "steps": ["Query history for ISS-9999"],
+      "test_data": {"issuer_id": "ISS-9999"},
+      "expected_result": "Rejected with ISSUER_NOT_FOUND.",
+      "covers": ["R7-AC4"]
+    },
+    {
+      "id": "R7-TC07", "title": "Known issuer with no actions in range returns an empty list", "type": "edge", "priority": "medium",
+      "preconditions": ["Issuer ISS-6001 has no actions in 2020"],
+      "steps": ["Query 2020-01-01 to 2020-12-31"],
+      "test_data": {"issuer_id": "ISS-6001"},
+      "expected_result": "Returns an empty list and no error.",
+      "covers": ["R7-AC4"]
+    },
+    {
+      "id": "R7-TC08", "title": "Correction creates a new record and keeps the original", "type": "positive", "priority": "high",
+      "preconditions": ["Issuer ISS-6004 has action ACT-1 (DOWNGRADE to Baa3) recorded in error"],
+      "steps": ["Record a CORRECTION referencing ACT-1", "Query history covering the action date"],
+      "test_data": {"original_action_id": "ACT-1"},
+      "expected_result": "Both ACT-1 and the CORRECTION record are returned; the CORRECTION references ACT-1; ACT-1 is unchanged.",
+      "covers": ["R7-AC6"]
+    },
+    {
+      "id": "R7-TC09", "title": "Existing history records cannot be edited or deleted", "type": "negative", "priority": "high",
+      "preconditions": ["Issuer ISS-6004 has action ACT-1"],
+      "steps": ["Attempt to update ACT-1's new_rating", "Attempt to delete ACT-1", "Query history"],
+      "test_data": {"action_id": "ACT-1"},
+      "expected_result": "Both attempts are rejected; ACT-1 is unchanged and still returned.",
+      "covers": ["R7-AC6"]
+    }
+  ]
+}

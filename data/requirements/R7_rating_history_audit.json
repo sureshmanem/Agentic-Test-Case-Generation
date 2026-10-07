@@ -1,0 +1,15 @@
+{
+  "id": "R7",
+  "title": "Rating History and Audit Trail",
+  "component": "Compliance & Audit",
+  "user_story": "As a compliance officer, I want to query the rating history of an issuer for a date range so that I can audit rating changes.",
+  "acceptance_criteria": [
+    {"id": "R7-AC1", "text": "The history is queried by issuer_id, from_date and to_date (both inclusive) and returns all rating actions whose effective_date falls in the range."},
+    {"id": "R7-AC2", "text": "Results are sorted by effective_date descending; actions with the same effective_date are sorted by recorded_at descending."},
+    {"id": "R7-AC3", "text": "If from_date is after to_date the query is rejected with INVALID_DATE_RANGE. A range longer than 10 years is rejected with DATE_RANGE_TOO_LARGE."},
+    {"id": "R7-AC4", "text": "An unknown issuer_id is rejected with ISSUER_NOT_FOUND. A known issuer with no actions in the range returns an empty list, not an error."},
+    {"id": "R7-AC5", "text": "Each record includes action_id, action_type, agency, previous_rating, new_rating, notch_change, effective_date, analyst_id and recorded_at."},
+    {"id": "R7-AC6", "text": "History records are immutable. A correction is recorded as a new action of type CORRECTION that references the original action_id; the original record remains visible."}
+  ],
+  "references": ["rating_rules.md", "error_codes.md"]
+}

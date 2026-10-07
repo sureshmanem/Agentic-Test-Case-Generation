@@ -1,0 +1,15 @@
+{
+  "id": "R6",
+  "title": "Regulatory Rating Selection Rule",
+  "component": "Regulatory Capital",
+  "user_story": "As a regulatory capital analyst, I want a single regulatory rating derived from the ratings of multiple agencies so that capital charges are calculated consistently.",
+  "acceptance_criteria": [
+    {"id": "R6-AC1", "text": "Ratings from MOODYS, FITCH and NORTHBRIDGE (uses Fitch-style symbols) are compared on the common rank from the cross-agency mapping (1 = highest)."},
+    {"id": "R6-AC2", "text": "If exactly one eligible rating exists, it is the regulatory rating (rule_applied=SINGLE)."},
+    {"id": "R6-AC3", "text": "If two eligible ratings exist, the lower (worse) of the two is the regulatory rating (rule_applied=LOWER_OF_TWO)."},
+    {"id": "R6-AC4", "text": "If three eligible ratings exist, take the two best ratings and use the lower of those two (rule_applied=SECOND_BEST)."},
+    {"id": "R6-AC5", "text": "Withdrawn (WR, WD) and not-rated (NR) entries are not eligible. If no eligible rating exists, the result is UNRATED."},
+    {"id": "R6-AC6", "text": "The result includes regulatory_rank, regulatory_rating (Fitch-style symbol), source_agency and rule_applied."}
+  ],
+  "references": ["rating_rules.md", "cross_agency_mapping.md"]
+}

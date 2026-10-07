@@ -1,0 +1,122 @@
+openapi: 3.0.3
+info:
+  title: Issuer Ratings API (synthetic)
+  version: 1.0.0
+servers:
+  - url: https://ratings.example.test
+security:
+  - bearerAuth: []
+paths:
+  /v1/issuers/{issuerId}/ratings:
+    get:
+      summary: Get current ratings for an issuer
+      parameters:
+        - $ref: '#/components/parameters/IssuerId'
+        - name: agency
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/Agency'
+      responses:
+        '200':
+          description: Current ratings
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [issuer_id, ratings]
+                properties:
+                  issuer_id: {type: string}
+                  ratings:
+                    type: array
+                    items: {$ref: '#/components/schemas/CurrentRating'}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /v1/issuers/{issuerId}/rating-actions:
+    post:
+      summary: Submit a rating action (requires scope ratings:write)
+      parameters:
+        - $ref: '#/components/parameters/IssuerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RatingActionRequest'}
+      responses:
+        '201':
+          description: Action created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RatingAction'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    IssuerId:
+      name: issuerId
+      in: path
+      required: true
+      schema: {type: string, example: ISS-1001}
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+  schemas:
+    Agency:
+      type: string
+      enum: [MOODYS, FITCH, NORTHBRIDGE]
+    Grade:
+      type: string
+      enum: [INVESTMENT_GRADE, SPECULATIVE_GRADE, NOT_RATED]
+    CurrentRating:
+      type: object
+      required: [agency, rating, effective_date, grade]
+      properties:
+        agency: {$ref: '#/components/schemas/Agency'}
+        rating: {type: string, example: Baa2}
+        outlook:
+          type: string
+          nullable: true
+          enum: [POSITIVE, NEGATIVE, STABLE, DEVELOPING]
+        watch:
+          type: string
+          nullable: true
+          enum: [WATCH_POSITIVE, WATCH_NEGATIVE, WATCH_DEVELOPING]
+        effective_date: {type: string, format: date}
+        grade: {$ref: '#/components/schemas/Grade'}
+    RatingActionRequest:
+      type: object
+      required: [agency, action_type, new_rating, effective_date]
+      properties:
+        agency: {$ref: '#/components/schemas/Agency'}
+        action_type:
+          type: string
+          enum: [NEW, UPGRADE, DOWNGRADE, AFFIRM, WITHDRAW]
+        new_rating: {type: string, example: Baa3}
+        effective_date: {type: string, format: date}
+        analyst_id: {type: string}
+    RatingAction:
+      allOf:
+        - $ref: '#/components/schemas/RatingActionRequest'
+        - type: object
+          required: [action_id, previous_rating, notch_change, recorded_at]
+          properties:
+            action_id: {type: string}
+            previous_rating: {type: string, nullable: true}
+            notch_change: {type: integer}
+            recorded_at: {type: string, format: date-time}
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string, example: INVALID_RATING_SYMBOL}
+        message: {type: string}

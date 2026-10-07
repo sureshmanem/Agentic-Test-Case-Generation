@@ -1,0 +1,15 @@
+{
+  "id": "R4",
+  "title": "Rating Actions and Notch Change",
+  "component": "Rating Actions",
+  "user_story": "As a rating analyst, I want to record rating actions so that every rating change is tracked with its notch movement.",
+  "acceptance_criteria": [
+    {"id": "R4-AC1", "text": "Supported action types are NEW, UPGRADE, DOWNGRADE, AFFIRM and WITHDRAW."},
+    {"id": "R4-AC2", "text": "The action type must match the rating change: UPGRADE requires a higher new rating, DOWNGRADE a lower new rating, AFFIRM an unchanged rating. Otherwise the action is rejected with ACTION_TYPE_MISMATCH."},
+    {"id": "R4-AC3", "text": "notch_change is the difference in ordinal positions on the agency's own scale: positive for an upgrade, negative for a downgrade, 0 for an affirmation (Moody's-style: Aaa=1 ... C=21; Fitch-style: AAA=1 ... C=21, RD=22, D=23)."},
+    {"id": "R4-AC4", "text": "The effective date may be today or in the past. A future effective date is rejected with FUTURE_EFFECTIVE_DATE."},
+    {"id": "R4-AC5", "text": "NEW is allowed only when the issuer has no active rating from that agency; otherwise it is rejected with RATING_ALREADY_EXISTS. WITHDRAW sets the rating status to WR (MOODYS) or WD (FITCH)."},
+    {"id": "R4-AC6", "text": "Large downgrades must be highlighted for senior review."}
+  ],
+  "references": ["rating_scales.md", "rating_rules.md", "error_codes.md"]
+}

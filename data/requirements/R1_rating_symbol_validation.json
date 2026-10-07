@@ -1,0 +1,15 @@
+{
+  "id": "R1",
+  "title": "Rating Symbol Validation",
+  "component": "Ratings Data Entry",
+  "user_story": "As a ratings data steward, I want the system to validate rating symbols on entry so that only valid agency-scale ratings are stored.",
+  "acceptance_criteria": [
+    {"id": "R1-AC1", "text": "When the agency is MOODYS, the system accepts every symbol on the Moody's-style long-term scale (21 symbols, Aaa to C)."},
+    {"id": "R1-AC2", "text": "When the agency is FITCH, the system accepts every symbol on the Fitch-style long-term scale (23 symbols, AAA to D, including CCC+, CCC-, RD and D)."},
+    {"id": "R1-AC3", "text": "A symbol that is valid only on the other agency's scale is rejected with error code RATING_SCALE_MISMATCH (e.g. 'Aa2' submitted for FITCH)."},
+    {"id": "R1-AC4", "text": "Leading and trailing whitespace is trimmed before validation. Validation is case-sensitive: 'aa2' or 'bbb' is not a valid symbol."},
+    {"id": "R1-AC5", "text": "Unknown or malformed symbols (e.g. 'Aa4', 'AAA+', 'BBB--', empty string) are rejected with error code INVALID_RATING_SYMBOL."},
+    {"id": "R1-AC6", "text": "Status codes are accepted but stored with is_rating=false: 'WR' (withdrawn) and 'NR' (not rated) for MOODYS; 'WD' (withdrawn) and 'NR' for FITCH."}
+  ],
+  "references": ["rating_scales.md", "error_codes.md"]
+}

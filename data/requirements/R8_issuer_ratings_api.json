@@ -1,0 +1,16 @@
+{
+  "id": "R8",
+  "title": "Issuer Ratings REST API",
+  "component": "Ratings API",
+  "user_story": "As a downstream system, I want a REST API to retrieve an issuer's current ratings and submit rating actions so that ratings stay in sync across systems.",
+  "acceptance_criteria": [
+    {"id": "R8-AC1", "text": "GET /v1/issuers/{issuerId}/ratings returns 200 with the issuer's current ratings for all agencies; each item contains agency, rating, outlook, watch, effective_date and grade."},
+    {"id": "R8-AC2", "text": "The optional query parameter agency (MOODYS, FITCH, NORTHBRIDGE) filters the result. Any other value returns 400 with code INVALID_AGENCY."},
+    {"id": "R8-AC3", "text": "An unknown issuerId returns 404 with code ISSUER_NOT_FOUND."},
+    {"id": "R8-AC4", "text": "A missing or invalid bearer token returns 401. A valid token without the ratings:write scope calling POST returns 403."},
+    {"id": "R8-AC5", "text": "POST /v1/issuers/{issuerId}/rating-actions validates the body using the R1 and R4 rules. Validation failures return 422 with the error code from those rules; success returns 201 with the created action including notch_change."},
+    {"id": "R8-AC6", "text": "All responses are JSON (Content-Type: application/json). Error responses have the shape {\"code\": string, \"message\": string}."}
+  ],
+  "attachments": ["R8_issuer_ratings_api.openapi.yaml"],
+  "references": ["error_codes.md"]
+}

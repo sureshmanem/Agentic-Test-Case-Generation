@@ -1,0 +1,81 @@
+{
+  "requirement_id": "R2",
+  "expected_ambiguities": [
+    "Behaviour is not specified when source and target agency are the same (e.g. MOODYS to MOODYS).",
+    "It is not stated whether NORTHBRIDGE can be used as a source or target agency for mapping."
+  ],
+  "test_cases": [
+    {
+      "id": "R2-TC01", "title": "Map every Moody's-style symbol to its Fitch-style equivalent", "type": "positive", "priority": "high",
+      "preconditions": ["Mapping table loaded"],
+      "steps": ["For each of the 21 Moody's-style symbols, request mapping MOODYS -> FITCH", "Compare target_symbol with the mapping table"],
+      "test_data": {"pairs": [["Aaa","AAA"],["Aa1","AA+"],["Aa2","AA"],["Aa3","AA-"],["A1","A+"],["A2","A"],["A3","A-"],["Baa1","BBB+"],["Baa2","BBB"],["Baa3","BBB-"],["Ba1","BB+"],["Ba2","BB"],["Ba3","BB-"],["B1","B+"],["B2","B"],["B3","B-"],["Caa1","CCC+"],["Caa2","CCC"],["Caa3","CCC-"],["Ca","CC"],["C","C"]]},
+      "expected_result": "Each symbol maps to exactly the Fitch-style symbol in the table, with lossy=false.",
+      "covers": ["R2-AC1"]
+    },
+    {
+      "id": "R2-TC02", "title": "Map every Fitch-style symbol AAA..C to its Moody's-style equivalent", "type": "positive", "priority": "high",
+      "preconditions": ["Mapping table loaded"],
+      "steps": ["For each Fitch-style symbol from AAA to C, request mapping FITCH -> MOODYS"],
+      "test_data": {"direction": "FITCH->MOODYS", "symbols": "AAA..C (21 symbols)"},
+      "expected_result": "Each symbol maps to the Moody's-style symbol in the table, with lossy=false.",
+      "covers": ["R2-AC1"]
+    },
+    {
+      "id": "R2-TC03", "title": "Round-trip conversion returns the original symbol", "type": "positive", "priority": "high",
+      "preconditions": [],
+      "steps": ["Convert each Moody's-style symbol to Fitch-style and back", "Convert each Fitch-style symbol AAA..C to Moody's-style and back"],
+      "test_data": {"samples": ["Aaa", "Baa3", "Caa2", "C", "AA-", "BB+", "CCC-"]},
+      "expected_result": "Every round trip returns the original symbol.",
+      "covers": ["R2-AC2"]
+    },
+    {
+      "id": "R2-TC04", "title": "Map the investment-grade boundary symbols correctly", "type": "boundary", "priority": "high",
+      "preconditions": [],
+      "steps": ["Map Baa3 -> FITCH", "Map Ba1 -> FITCH"],
+      "test_data": {"cases": [{"source": "Baa3", "expected": "BBB-", "common_rank": 10}, {"source": "Ba1", "expected": "BB+", "common_rank": 11}]},
+      "expected_result": "Baa3 -> BBB- (rank 10) and Ba1 -> BB+ (rank 11).",
+      "covers": ["R2-AC1", "R2-AC6"]
+    },
+    {
+      "id": "R2-TC05", "title": "Map Fitch-style RD and D one-way to C with lossy=true", "type": "edge", "priority": "high",
+      "preconditions": [],
+      "steps": ["Map RD (FITCH) -> MOODYS", "Map D (FITCH) -> MOODYS"],
+      "test_data": {"cases": ["RD", "D"]},
+      "expected_result": "Both return target_symbol='C', common_rank=21, lossy=true.",
+      "covers": ["R2-AC3", "R2-AC6"]
+    },
+    {
+      "id": "R2-TC06", "title": "Map Moody's-style C to Fitch-style C, not RD or D", "type": "edge", "priority": "medium",
+      "preconditions": [],
+      "steps": ["Map C (MOODYS) -> FITCH"],
+      "test_data": {"source_agency": "MOODYS", "source_symbol": "C"},
+      "expected_result": "target_symbol='C', lossy=false.",
+      "covers": ["R2-AC2", "R2-AC3"]
+    },
+    {
+      "id": "R2-TC07", "title": "Reject mapping of status codes", "type": "negative", "priority": "high",
+      "preconditions": [],
+      "steps": ["Request mapping for WR (MOODYS), WD (FITCH), NR (MOODYS) and NR (FITCH)"],
+      "test_data": {"cases": [["MOODYS","WR"],["FITCH","WD"],["MOODYS","NR"],["FITCH","NR"]]},
+      "expected_result": "Each request returns NOT_MAPPABLE.",
+      "covers": ["R2-AC4"]
+    },
+    {
+      "id": "R2-TC08", "title": "Reject mapping of invalid symbols", "type": "negative", "priority": "medium",
+      "preconditions": [],
+      "steps": ["Request mapping for 'Aa4' (MOODYS) and 'AAA+' (FITCH)"],
+      "test_data": {"cases": [["MOODYS","Aa4"],["FITCH","AAA+"]]},
+      "expected_result": "Each request returns INVALID_RATING_SYMBOL.",
+      "covers": ["R2-AC5"]
+    },
+    {
+      "id": "R2-TC09", "title": "Response contains all required fields and the correct common_rank", "type": "positive", "priority": "medium",
+      "preconditions": [],
+      "steps": ["Map Aaa, Baa3 and C from MOODYS to FITCH", "Inspect the response fields"],
+      "test_data": {"expected_ranks": {"Aaa": 1, "Baa3": 10, "C": 21}},
+      "expected_result": "Each response contains source_agency, source_symbol, target_agency, target_symbol, lossy and common_rank, with ranks 1, 10 and 21.",
+      "covers": ["R2-AC6"]
+    }
+  ]
+}

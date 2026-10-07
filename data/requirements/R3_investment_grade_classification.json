@@ -1,0 +1,14 @@
+{
+  "id": "R3",
+  "title": "Investment vs. Speculative Grade Classification",
+  "component": "Portfolio Compliance",
+  "user_story": "As a portfolio manager, I want each rating classified as Investment Grade or Speculative Grade so that I can enforce mandate limits.",
+  "acceptance_criteria": [
+    {"id": "R3-AC1", "text": "Ratings of Baa3 (MOODYS) / BBB- (FITCH) or higher are classified as INVESTMENT_GRADE."},
+    {"id": "R3-AC2", "text": "Ratings of Ba1 (MOODYS) / BB+ (FITCH) or lower, including C, RD and D, are classified as SPECULATIVE_GRADE."},
+    {"id": "R3-AC3", "text": "Fitch-style RD and D are additionally flagged in_default=true. All other ratings have in_default=false."},
+    {"id": "R3-AC4", "text": "Status codes WR, WD and NR are classified as NOT_RATED."},
+    {"id": "R3-AC5", "text": "When an issuer has one INVESTMENT_GRADE and one SPECULATIVE_GRADE rating from different agencies, the issuer is flagged split_rated=true; otherwise split_rated=false."}
+  ],
+  "references": ["rating_scales.md", "rating_rules.md"]
+}

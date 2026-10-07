@@ -54,6 +54,12 @@ source .venv/bin/activate    # optional: activate manually
 .
 ├── README.md
 ├── UseCase1_Test_Case_Generation.md   # Use case design
+├── UseCase1_Implementation.md         # Step-by-step plan, progress tracker, change log
+├── data/
+│   ├── requirements/                  # 8 synthetic credit-ratings requirements (+ OpenAPI spec)
+│   ├── golden/                        # 75 expected test cases linked to acceptance criteria
+│   └── knowledge/                     # Documents for the retrieval (RAG) store
+├── scripts/validate_data.py           # Data consistency checks
 ├── pyproject.toml                     # Project & dependencies
 ├── uv.lock                            # Locked dependency versions
 └── .python-version
@@ -61,9 +67,11 @@ source .venv/bin/activate    # optional: activate manually
 
 ## Roadmap
 
+Detailed plan and progress: [UseCase1_Implementation.md](UseCase1_Implementation.md)
+
 - [x] Use case design
 - [x] Environment setup (uv)
-- [ ] Golden dataset: requirements → expected test cases
+- [x] Golden dataset: 8 credit-ratings requirements → 75 expected test cases
 - [ ] Test-generation agent (retrieve → plan → generate → self-check)
 - [ ] DeepEval / Ragas evaluation suite
 - [ ] Evaluation as a CI quality gate
