@@ -6,6 +6,7 @@ A prototype that shows an **agentic AI workflow writes better test cases from re
 - **Agent:** LangGraph workflow with retrieval (Chroma) and a self-review loop, using OpenAI `gpt-4.1`.
 - **Outputs:** structured test cases (table/JSON), Gherkin `.feature` files, pytest skeletons, and a traceability matrix.
 - **Demo:** Streamlit app.
+- **Observability:** optional LangSmith tracing of every agent step, LLM call, retrieval and evaluation, with metric scores attached as feedback.
 
 Design: [UseCase1_Test_Case_Generation.md](UseCase1_Test_Case_Generation.md) · Plan, progress and change log: [UseCase1_Implementation.md](UseCase1_Implementation.md)
 
@@ -84,17 +85,40 @@ Preliminary, on **R4 only**, with a single judgement (the full run across R1–R
 
 The baseline also got notch arithmetic wrong in an earlier run (an upgrade given as −2). The agent correctly refused to invent a threshold for the vague "large downgrade" criterion.
 
+## LangSmith Tracing (Optional)
+
+Add to `.env`:
+
+```bash
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=lsv2_...
+LANGSMITH_PROJECT=agentic-test-case-generation   # default if unset
+```
+
+Then every `generate`, `evaluate` and app run is traced to LangSmith:
+
+| Trace | Contents |
+|---|---|
+| `baseline R<n>` | The single structured-output LLM call |
+| `agent R<n>` | One child run per graph node (analyse → retrieve → plan → generate → review ↔ revise → finalize), with the LLM calls inside and the Chroma search as a `knowledge_base_search` retriever run |
+| `evaluate <mode> R<n>` | The judge calls (per-scenario verdicts, Ragas through a wrapped OpenAI client) and the scores. DeepEval uses its own OpenAI client, so only its scores appear. |
+
+- **Feedback:** `evaluate` attaches every metric score (with the judge's reason) to the generation run it evaluated, so runs can be filtered and compared by score in LangSmith.
+- **Filtering:** runs are tagged by mode and requirement id (`agent`, `R4`); metadata holds the requirement title and model.
+- **Links:** each saved result stores its `run_id`, and the Streamlit app shows an **Open trace in LangSmith** button.
+- The offline test suite never traces (`tests/conftest.py` forces tracing off), even when `.env` enables it.
+
 ## Tests and CI
 
 ```bash
-uv run pytest                 # 60 offline tests (fake LLM and embeddings), no API key needed
+uv run pytest                 # 73 offline tests (fake LLM and embeddings), no API key needed
 uv run pytest -m llm          # live OpenAI tests (opt-in)
 uv run python scripts/validate_data.py
 ```
 
 GitHub Actions (`.github/workflows/ci.yml`):
 - **On every push and PR:** offline tests and data validation.
-- **Manual "Run workflow":** live generate + evaluate with `--gate` (fails below the absolute thresholds). Requires an `OPENAI_API_KEY` repository secret. The report is uploaded as an artifact.
+- **Manual "Run workflow":** live generate + evaluate with `--gate` (fails below the absolute thresholds). Requires an `OPENAI_API_KEY` repository secret. The report is uploaded as an artifact. With an optional `LANGSMITH_API_KEY` secret, the run is also traced to the LangSmith project `agentic-test-case-generation-ci`.
 
 ## Project Structure
 
@@ -102,7 +126,7 @@ GitHub Actions (`.github/workflows/ci.yml`):
 .
 ├── app.py                              # Streamlit demo
 ├── src/agentic_tcg/
-│   ├── config.py                       # Settings (.env), paths
+│   ├── config.py                       # Settings (.env), paths, LangSmith tracing switches
 │   ├── models.py                       # Requirement, TestCase, TestSuite, loaders
 │   ├── llm.py                          # OpenAI structured output, LLM-facing schemas
 │   ├── prompts.py                      # Baseline and agent prompts

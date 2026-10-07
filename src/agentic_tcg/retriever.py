@@ -13,6 +13,7 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_text_splitters import MarkdownHeaderTextSplitter
+from langsmith import traceable
 
 from agentic_tcg.config import get_settings
 from agentic_tcg.models import load_knowledge_docs
@@ -44,6 +45,12 @@ def default_embeddings() -> Embeddings:
     return OpenAIEmbeddings(model=get_settings().embedding_model)
 
 
+def _retriever_outputs(chunks: list[Chunk]) -> dict:
+    """Shape the output like a LangChain retriever run, so LangSmith shows the documents."""
+    return {"documents": [{"type": "Document", "page_content": c.text,
+                           "metadata": {"source": c.source, "section": c.section}} for c in chunks]}
+
+
 class KnowledgeBase:
     def __init__(self, embeddings: Embeddings | None = None, docs: dict[str, str] | None = None):
         client = chromadb.EphemeralClient(settings=ChromaSettings(anonymized_telemetry=False))
@@ -57,6 +64,7 @@ class KnowledgeBase:
         if self.documents:
             self.store.add_documents(self.documents)
 
+    @traceable(run_type="retriever", name="knowledge_base_search", process_outputs=_retriever_outputs)
     def search(self, queries: list[str], k: int | None = None, max_chunks: int = 8) -> list[Chunk]:
         """Run every query and keep the best-scoring unique chunks (lower distance = better)."""
         k = k or get_settings().retrieval_k

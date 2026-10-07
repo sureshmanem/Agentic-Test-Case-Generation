@@ -7,7 +7,7 @@
 import argparse
 import sys
 
-from agentic_tcg.config import get_settings
+from agentic_tcg.config import flush_traces, get_settings, langsmith_project, tracing_enabled
 from agentic_tcg.models import load_requirement, load_requirements
 from agentic_tcg.pipeline import MODES, run_agent, run_baseline, save_result
 from agentic_tcg.retriever import KnowledgeBase
@@ -27,6 +27,8 @@ def main(argv: list[str] | None = None) -> int:
     reqs = [load_requirement(r.strip()) for r in args.requirements.split(",")] if args.requirements else load_requirements()
     modes = MODES if args.mode == "both" else (args.mode,)
     kb = KnowledgeBase() if "agent" in modes else None
+    if tracing_enabled():
+        print(f"LangSmith tracing on: project '{langsmith_project()}'")
 
     for req in reqs:
         for mode in modes:
@@ -35,6 +37,7 @@ def main(argv: list[str] | None = None) -> int:
             coverage = build_traceability(req, result.suite).coverage
             print(f"{req.id} {mode:8} {len(result.suite.test_cases):3} tests  coverage {coverage:4.0%}  "
                   f"{result.llm_calls} LLM call(s)  {result.elapsed_seconds:6.1f}s  -> {path}")
+    flush_traces()
     return 0
 
 

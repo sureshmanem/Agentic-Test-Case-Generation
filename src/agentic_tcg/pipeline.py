@@ -1,6 +1,7 @@
 """Run the baseline or the agent for a requirement, and save/load the results."""
 
 import time
+import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,7 +12,7 @@ from pydantic import BaseModel
 from agentic_tcg.agent import build_agent
 from agentic_tcg.baseline import generate_baseline
 from agentic_tcg import config
-from agentic_tcg.config import get_settings
+from agentic_tcg.config import get_settings, tracing_enabled
 from agentic_tcg.llm import StructuredLLM, get_chat_model
 from agentic_tcg.models import Requirement, TestSuite, load_requirement, save_json
 from agentic_tcg.renderers import to_gherkin, to_markdown_table, to_pytest, traceability_markdown
@@ -32,6 +33,8 @@ class GenerationResult(BaseModel):
     llm_calls: int
     elapsed_seconds: float
     created_at: str
+    run_id: str | None = None  # root run id; also the LangSmith trace id when `traced`
+    traced: bool = False
 
 
 class CountingLLM:
@@ -44,21 +47,34 @@ class CountingLLM:
         bound, outer = self.llm.with_structured_output(schema, **kwargs), self
 
         class _Counted:
-            def invoke(self, messages: Any) -> Any:
+            def invoke(self, messages: Any, config: Any = None) -> Any:
                 outer.calls += 1
-                return bound.invoke(messages)
+                return bound.invoke(messages, config=config)
 
         return _Counted()
 
 
+def run_config(mode: Mode, requirement: Requirement, run_id: str) -> dict[str, Any]:
+    """RunnableConfig that names and tags the root run, so LangSmith traces are easy to find and filter."""
+    return {
+        "run_id": uuid.UUID(run_id),
+        "run_name": f"{mode} {requirement.id}",
+        "tags": [mode, requirement.id],
+        "metadata": {"mode": mode, "requirement_id": requirement.id, "requirement_title": requirement.title,
+                     "generation_model": get_settings().generation_model},
+    }
+
+
 def run_baseline(requirement: Requirement, llm: StructuredLLM | None = None) -> GenerationResult:
     counter = CountingLLM(llm or get_chat_model())
+    run_id = str(uuid.uuid4())
     start = time.perf_counter()
-    suite = generate_baseline(requirement, counter)
+    suite = generate_baseline(requirement, counter, config=run_config("baseline", requirement, run_id))
     return GenerationResult(
         mode="baseline", requirement_id=requirement.id, model=get_settings().generation_model, suite=suite,
         llm_calls=counter.calls, elapsed_seconds=round(time.perf_counter() - start, 2),
         created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        run_id=run_id, traced=tracing_enabled(),
     )
 
 
@@ -70,11 +86,13 @@ def run_agent(
 ) -> GenerationResult:
     """Run the agent graph. `on_step` receives each trace entry as soon as its node finishes."""
     counter = CountingLLM(llm or get_chat_model())
+    run_id = str(uuid.uuid4())
     start = time.perf_counter()
     graph = build_agent(counter, kb or KnowledgeBase())
     state: dict[str, Any] = {}
     seen = 0
-    for state in graph.stream({"requirement": requirement, "trace": []}, stream_mode="values"):
+    config = run_config("agent", requirement, run_id)
+    for state in graph.stream({"requirement": requirement, "trace": []}, config=config, stream_mode="values"):
         for entry in state.get("trace", [])[seen:]:
             if on_step:
                 on_step(entry)
@@ -84,6 +102,7 @@ def run_agent(
         retrieved_contexts=[c.as_context() for c in state["chunks"]], trace=state["trace"],
         llm_calls=counter.calls, elapsed_seconds=round(time.perf_counter() - start, 2),
         created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        run_id=run_id, traced=tracing_enabled(),
     )
 
 

@@ -13,6 +13,10 @@ GOLDEN_DIR = DATA_DIR / "golden"
 KNOWLEDGE_DIR = DATA_DIR / "knowledge"
 load_dotenv(ROOT / ".env")
 
+DEFAULT_LANGSMITH_PROJECT = "agentic-test-case-generation"
+# Send traces to this project instead of LangSmith's "default" unless the user chose one
+os.environ.setdefault("LANGSMITH_PROJECT", DEFAULT_LANGSMITH_PROJECT)
+
 # Overridable so tests and demos can use scratch folders
 OUTPUTS_DIR = Path(os.getenv("AGENTIC_TCG_OUTPUTS_DIR") or ROOT / "outputs")
 REPORTS_DIR = Path(os.getenv("AGENTIC_TCG_REPORTS_DIR") or ROOT / "reports")
@@ -34,6 +38,30 @@ class Settings:
     def has_api_key(self) -> bool:
         key = os.getenv("OPENAI_API_KEY", "")
         return bool(key) and not key.startswith("sk-...")
+
+
+def _truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def tracing_enabled() -> bool:
+    """LangSmith tracing is on when LANGSMITH_TRACING is true and an API key is set
+    (the legacy LANGCHAIN_* names are accepted too)."""
+    flag = os.getenv("LANGSMITH_TRACING") or os.getenv("LANGCHAIN_TRACING_V2")
+    key = os.getenv("LANGSMITH_API_KEY") or os.getenv("LANGCHAIN_API_KEY") or ""
+    return _truthy(flag) and bool(key) and not key.startswith("lsv2_...")
+
+
+def langsmith_project() -> str:
+    return os.getenv("LANGSMITH_PROJECT") or os.getenv("LANGCHAIN_PROJECT") or DEFAULT_LANGSMITH_PROJECT
+
+
+def flush_traces() -> None:
+    """Make sure queued LangSmith traces are sent before a CLI process exits."""
+    if tracing_enabled():
+        from langchain_core.tracers.langchain import wait_for_all_tracers
+
+        wait_for_all_tracers()
 
 
 def get_settings() -> Settings:

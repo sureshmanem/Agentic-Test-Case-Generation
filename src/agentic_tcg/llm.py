@@ -31,9 +31,12 @@ def get_chat_model(model: str | None = None, temperature: float = 0.0):
     return ChatOpenAI(model=model or get_settings().generation_model, temperature=temperature)
 
 
-def invoke_structured(llm: StructuredLLM, schema: type[T], system: str, user: str) -> T:
+def invoke_structured(
+    llm: StructuredLLM, schema: type[T], system: str, user: str, config: dict[str, Any] | None = None
+) -> T:
+    """`config` is a LangChain RunnableConfig (run_name, tags, metadata, run_id) used for LangSmith tracing."""
     runnable = llm.with_structured_output(schema, method="json_schema", strict=True)
-    return runnable.invoke([("system", system), ("human", user)])
+    return runnable.invoke([("system", system), ("human", user)], config=config)
 
 
 # ---------- LLM-facing schemas ----------

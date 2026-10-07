@@ -24,10 +24,11 @@ class _Bound:
     def __init__(self, llm: FakeLLM, schema: type, kwargs: dict[str, Any]):
         self.llm, self.schema, self.kwargs = llm, schema, kwargs
 
-    def invoke(self, messages: list[tuple[str, str]]) -> BaseModel:
+    def invoke(self, messages: list[tuple[str, str]], config: dict[str, Any] | None = None) -> BaseModel:
         system = next(text for role, text in messages if role == "system")
         user = next(text for role, text in messages if role == "human")
-        self.llm.calls.append({"schema": self.schema.__name__, "system": system, "user": user, "kwargs": self.kwargs})
+        self.llm.calls.append({"schema": self.schema.__name__, "system": system, "user": user, "kwargs": self.kwargs,
+                               "config": config})
         result = self.llm.handler(self.schema, system, user)
         assert isinstance(result, self.schema), f"handler returned {type(result)} for {self.schema}"
         return result

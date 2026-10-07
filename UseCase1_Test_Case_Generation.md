@@ -30,6 +30,12 @@ Writing test cases from user stories, PRDs and API specs by hand is slow, gets u
 - Test management API (Xray / Zephyr / TestRail)
 - Code writer for executable skeletons
 
+## Observability
+
+- Every agent run is traced to **LangSmith**: one trace per requirement, with a child run per step (analyse, retrieve, plan, generate, review, revise, finalize), the LLM calls inside them, and the knowledge-base search as a retriever run.
+- Evaluation scores are attached to each trace as **feedback**, so a low-scoring run can be opened and its reasoning inspected step by step.
+- Runs are tagged by mode and requirement, which lets you compare the agent with the baseline in LangSmith.
+
 ## How to Evaluate
 
 | Concern | Metric |

@@ -25,6 +25,7 @@ Proposed success thresholds (to be confirmed): coverage ≥ 0.8, faithfulness �
 | Demo | Streamlit app |
 | Package manager | uv, isolated `.venv` |
 | Secrets | `OPENAI_API_KEY` in `.env` (gitignored) |
+| Observability | LangSmith tracing (optional, `LANGSMITH_TRACING` + `LANGSMITH_API_KEY`), project `agentic-test-case-generation`; metric scores sent as feedback |
 
 ## Progress Tracker
 
@@ -41,6 +42,7 @@ Status: ⬜ Not started · 🟡 In progress · ✅ Done
 | 6 | Evaluation suite (DeepEval + Ragas), agent vs. baseline report | ✅ |
 | 7 | Streamlit demo | ✅ |
 | 8 | Wrap-up: README results, optional CI quality gate | ✅ |
+| 9 | LangSmith tracing (runs, retriever, evaluation, feedback, app links, CI) | ✅ |
 
 ---
 
@@ -163,6 +165,23 @@ Run: `uv run streamlit run app.py`
 2. Have a QA engineer or ratings specialist review `data/golden/`, since every score is measured against it.
 3. Optional: add the `OPENAI_API_KEY` repository secret to enable the manual CI quality gate.
 
+### Step 9: LangSmith Tracing ✅
+Enable with `LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY` in `.env` (project defaults to `agentic-test-case-generation`).
+
+| What is traced | How |
+|---|---|
+| Baseline and agent runs | Root run `baseline R<n>` / `agent R<n>` with a fixed `run_id`, tags `[mode, R<n>]` and metadata (title, model), via a LangChain `RunnableConfig` |
+| Agent steps | LangGraph nodes become child runs automatically; LLM calls nest inside them |
+| Retrieval | `KnowledgeBase.search` is a `@traceable(run_type="retriever")` run showing the retrieved documents |
+| Evaluation | `evaluate <mode> R<n>` trace (`langsmith.trace`) with the per-item judge calls and Ragas calls (OpenAI client wrapped with `wrap_openai`); DeepEval uses its own client, so only its scores show |
+| Scores | `send_feedback()` attaches every metric score and reason as feedback on the generation run (with `trace_id` and `session_id`) |
+
+- `GenerationResult` stores `run_id` and `traced`; the Streamlit app shows tracing status and an **Open trace in LangSmith** button.
+- The CLIs flush queued traces before exit (`flush_traces()`).
+- CI quality-gate job traces to project `agentic-test-case-generation-ci` when the `LANGSMITH_API_KEY` secret exists.
+- `tests/conftest.py` forces tracing off for the test suite; `tests/test_tracing.py` checks the switches, root run naming, tags and ids, child runs per node, feedback, and that tests never trace (offline, using a recording tracer).
+- **Verified live (R3):** both runs appear in LangSmith with all node child runs; 11–12 feedback scores per run; evaluation traces present.
+
 ---
 
 ## Change Log
@@ -187,3 +206,6 @@ Run: `uv run streamlit run app.py`
 | 2026-10-07 | Judge variance observed: re-judging the same R4 outputs moved baseline faithfulness 0.92 → 0.53. Added `--repeats N` to average judgements; final numbers should use `--repeats 3`. |
 | 2026-10-06 | Step 7 completed. Uses `width="stretch"` instead of the deprecated `use_container_width`. |
 | 2026-10-06 | Step 8 completed. All steps done. The full R1-R8 evaluation with `--repeats 3` is left for the user to run and review. |
+| 2026-10-07 | **Step 9 added: LangSmith tracing** (requested after Step 8). Verified live on R3: runs, node child runs, retriever run, evaluation traces and feedback. |
+| 2026-10-07 | Feedback now passes `trace_id` and `session_id` (project id); without them LangSmith warns that run feedback is deprecated. |
+| 2026-10-07 | Issue found: the offline tests sent 39 fake-LLM runs to LangSmith once `.env` enabled tracing, because the langsmith SDK caches environment variables, so `monkeypatch.delenv` cannot switch it off. Fix: `tests/conftest.py` sets `LANGSMITH_TRACING=false` before anything is imported, plus a test asserting tests never trace. |

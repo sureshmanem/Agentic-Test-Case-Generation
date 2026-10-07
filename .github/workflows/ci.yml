@@ -30,6 +30,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      # Optional: traces and feedback go to LangSmith when the LANGSMITH_API_KEY secret exists
+      LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+      LANGSMITH_TRACING: ${{ secrets.LANGSMITH_API_KEY != '' }}
+      LANGSMITH_PROJECT: agentic-test-case-generation-ci
       REQS: ${{ inputs.requirements }}
     steps:
       - uses: actions/checkout@v7

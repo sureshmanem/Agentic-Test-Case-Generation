@@ -12,6 +12,7 @@ dependencies = [
     "langchain-community<0.4.2",
     "langchain-openai>=1.6.7",
     "langgraph>=1.2.14",
+    "langsmith>=0.14.4",
     "openai>=3.3.0",
     "python-dotenv>=1.2.4",
     "ragas>=0.4.3",
@@ -35,6 +36,10 @@ testpaths = ["tests"]
 asyncio_default_fixture_loop_scope = "function"
 # Live OpenAI tests are opt-in: uv run pytest -m llm
 addopts = "-m 'not llm'"
+filterwarnings = [
+    # raised inside the langsmith package itself when langsmith.wrappers is imported
+    "ignore:langsmith.wrappers._openai_agents is deprecated:DeprecationWarning",
+]
 markers = [
     "llm: needs OPENAI_API_KEY and calls the OpenAI API (deselect with -m 'not llm')",
 ]

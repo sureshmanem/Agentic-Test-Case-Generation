@@ -21,7 +21,7 @@ from statistics import mean
 from pydantic import BaseModel, Field
 
 from agentic_tcg import config
-from agentic_tcg.config import get_settings
+from agentic_tcg.config import flush_traces, get_settings, langsmith_project, tracing_enabled
 from agentic_tcg.llm import StructuredLLM, get_chat_model, invoke_structured
 from agentic_tcg.models import GoldenSet, Requirement, TestSuite, load_golden, load_knowledge_docs, load_requirement, load_requirements
 from agentic_tcg.pipeline import MODES, GenerationResult, Mode, load_result
@@ -53,6 +53,7 @@ class EvalRecord(BaseModel):
     llm_calls: int
     elapsed_seconds: float
     metrics: list[MetricScore]
+    run_id: str | None = None  # LangSmith run of the generation that was evaluated (if traced)
 
     def score(self, name: str) -> float | None:
         if name in INFO_FIELDS:
@@ -215,6 +216,7 @@ def verdict_judge(llm: StructuredLLM | None = None) -> Judge:
                 llm, ScenarioJudgement, SCENARIO_SYSTEM,
                 f"{item.requirement_text}\n\nReference test cases:\n{item.golden_text}\n\n"
                 f"Candidate test suite:\n{to_text(item.result.suite) or '(empty)'}",
+                config={"run_name": "judge: golden scenarios", "tags": ["evaluation", "judge"]},
             )
             by_id = {v.golden_id: v for v in out.verdicts}
             hits = [gid for gid in golden_ids if (v := by_id.get(gid)) and v.covered and not v.conflicting_expectation]
@@ -240,6 +242,7 @@ def verdict_judge(llm: StructuredLLM | None = None) -> Judge:
                 f"{item.requirement_text}\n\nExpected items:\n"
                 + "\n".join(f"{i}: {e}" for i, e in zip(ids, expected))
                 + f"\n\nCandidate questions and notes:\n{questions_text(item.result.suite)}",
+                config={"run_name": "judge: ambiguities", "tags": ["evaluation", "judge"]},
             )
             by_id = {v.expected_id: v for v in out.verdicts}
             raised = [i for i in ids if (v := by_id.get(i)) and v.raised]
@@ -260,7 +263,12 @@ def ragas_judge(model: str | None = None) -> Judge:
     from ragas.metrics.collections import ContextPrecisionWithReference, ContextRecall, Faithfulness
 
     # Ragas defaults to max_tokens=1024, too small for statement extraction over a full test suite
-    llm = llm_factory(model or get_settings().judge_model, client=AsyncOpenAI(), max_tokens=16000)
+    client = AsyncOpenAI()
+    if tracing_enabled():
+        from langsmith.wrappers import wrap_openai
+
+        client = wrap_openai(client)
+    llm = llm_factory(model or get_settings().judge_model, client=client, max_tokens=16000)
     faithfulness, precision, recall = Faithfulness(llm=llm), ContextPrecisionWithReference(llm=llm), ContextRecall(llm=llm)
 
     async def run(item: EvalInput) -> list[MetricScore]:
@@ -293,12 +301,49 @@ def ragas_judge(model: str | None = None) -> Judge:
 # ---------- orchestration and report ----------
 
 def evaluate_result(item: EvalInput, judges: list[Judge]) -> EvalRecord:
-    metrics = deterministic_metrics(item)
-    for judge in judges:
-        metrics += judge(item)
+    """Score one generated suite. With LangSmith on, this is one `evaluate <mode> <R>` trace holding the judge calls."""
+    from langsmith import trace
+
     r = item.result
+    with trace(name=f"evaluate {r.mode} {r.requirement_id}", run_type="chain",
+               tags=["evaluation", r.mode, r.requirement_id],
+               metadata={"mode": r.mode, "requirement_id": r.requirement_id, "judge_model": get_settings().judge_model,
+                         "generation_run_id": r.run_id},
+               inputs={"requirement_id": r.requirement_id, "mode": r.mode, "test_count": len(r.suite.test_cases)}) as run:
+        metrics = deterministic_metrics(item)
+        for judge in judges:
+            metrics += judge(item)
+        run.end(outputs={m.name: m.score for m in metrics})
     return EvalRecord(requirement_id=r.requirement_id, mode=r.mode, test_count=len(r.suite.test_cases),
-                      llm_calls=r.llm_calls, elapsed_seconds=r.elapsed_seconds, metrics=metrics)
+                      llm_calls=r.llm_calls, elapsed_seconds=r.elapsed_seconds, metrics=metrics,
+                      run_id=r.run_id if r.traced else None)
+
+
+def send_feedback(records: list[EvalRecord], client=None) -> int:
+    """Attach metric scores to the traced generation runs as LangSmith feedback. Returns the number sent."""
+    targets = [r for r in records if r.run_id]
+    if not targets or (client is None and not tracing_enabled()):
+        return 0
+    if client is None:
+        from langsmith import Client
+
+        client = Client()
+    try:
+        session_id = client.read_project(project_name=langsmith_project()).id
+    except Exception:
+        session_id = None
+    sent = 0
+    for record in targets:
+        for m in record.metrics:
+            if m.score is None:
+                continue
+            # generation runs are trace roots, so the trace id equals the run id
+            client.create_feedback(record.run_id, key=m.name, score=m.score, comment=(m.reason or None),
+                                   trace_id=record.run_id, session_id=session_id,
+                                   source_info={"judge_model": get_settings().judge_model})
+            sent += 1
+    return sent
+
 
 
 def average_records(records: list[EvalRecord]) -> EvalRecord:
@@ -471,6 +516,10 @@ def main(argv: list[str] | None = None) -> int:
 
     all_records = update_reports(records)
     print(build_report(all_records))
+    if tracing_enabled():
+        sent = send_feedback(records)
+        flush_traces()
+        print(f"LangSmith: {sent} feedback score(s) sent to project '{langsmith_project()}'", file=sys.stderr)
     if args.gate and not gate_passed(records):
         print("Quality gate FAILED", file=sys.stderr)
         return 1

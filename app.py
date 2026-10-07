@@ -9,8 +9,15 @@ import pandas as pd
 import streamlit as st
 
 from agentic_tcg import config
-from agentic_tcg.config import get_settings
-from agentic_tcg.evaluate import build_report, default_judges, evaluate_requirement, load_records, update_reports
+from agentic_tcg.config import get_settings, langsmith_project, tracing_enabled
+from agentic_tcg.evaluate import (
+    build_report,
+    default_judges,
+    evaluate_requirement,
+    load_records,
+    send_feedback,
+    update_reports,
+)
 from agentic_tcg.models import Requirement, TestSuite, load_golden, load_requirements
 from agentic_tcg.pipeline import MODES, GenerationResult, load_result, run_agent, run_baseline, save_result
 from agentic_tcg.renderers import questions_text, to_gherkin, to_pytest, to_rows, traceability_markdown
@@ -46,6 +53,28 @@ def requirements() -> dict[str, Requirement]:
     return {r.id: r for r in load_requirements()}
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def langsmith_url(run_id: str) -> str | None:
+    """Link to a run in LangSmith (None until the run has been ingested, or if LangSmith is unreachable)."""
+    try:
+        from langsmith import Client
+
+        client = Client()
+        return client.get_run_url(run=client.read_run(run_id), project_name=langsmith_project())
+    except Exception:
+        return None
+
+
+def trace_link(result: GenerationResult | None) -> None:
+    if not result or not result.traced or not result.run_id:
+        return
+    url = langsmith_url(result.run_id)
+    if url:
+        st.link_button("Open trace in LangSmith", url)
+    else:
+        st.caption(f"LangSmith run id: `{result.run_id}` (link available once the trace is ingested)")
+
+
 def coverage(req: Requirement, result: GenerationResult | None) -> float | None:
     return build_traceability(req, result.suite).coverage if result else None
 
@@ -64,6 +93,10 @@ with st.sidebar:
     if not has_key:
         st.warning("OPENAI_API_KEY is not set. Showing saved outputs only.")
     st.caption(f"Generation `{get_settings().generation_model}` · judge `{get_settings().judge_model}`")
+    if tracing_enabled():
+        st.caption(f"LangSmith tracing: **on** · project `{langsmith_project()}`")
+    else:
+        st.caption("LangSmith tracing: off (set `LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY` in `.env`)")
 
     col1, col2 = st.columns(2)
     run_base = col1.button("Baseline", disabled=not has_key, width="stretch", help="1 LLM call")
@@ -88,7 +121,8 @@ with st.sidebar:
             found = evaluate_requirement(req, default_judges())
             if found:
                 update_reports(found)
-                st.success(f"Evaluated {len(found)} output(s)")
+                sent = send_feedback(found)
+                st.success(f"Evaluated {len(found)} output(s)" + (f"; {sent} scores sent to LangSmith" if sent else ""))
             else:
                 st.info("Generate outputs first.")
 
@@ -150,6 +184,7 @@ with tabs[1]:
         st.info(NO_OUTPUT.format(rid=rid))
     else:
         suite = result.suite
+        trace_link(result)
         fmt_tabs = st.tabs(["Table", "Gherkin", "pytest", "Clarification questions"])
         with fmt_tabs[0]:
             st.dataframe(pd.DataFrame(to_rows(suite)), width="stretch", hide_index=True)
@@ -189,6 +224,7 @@ with tabs[3]:
     if not agent:
         st.info(NO_OUTPUT.format(rid=rid))
     else:
+        trace_link(agent)
         for i, entry in enumerate(agent.trace, 1):
             with st.expander(f"{i}. **{entry['step']}**: {entry['summary']}"):
                 if entry.get("detail"):
