@@ -108,3 +108,24 @@ def to_pytest(requirement: Requirement, suite: TestSuite) -> str:
         ]
     text = "\n".join(lines)
     return "\n".join(line.rstrip() for line in text.splitlines()).rstrip() + "\n"
+
+
+def to_text(suite: TestSuite) -> str:
+    """Compact plain text of the test cases, used as the output an LLM judge reads."""
+    blocks = []
+    for tc in suite.test_cases:
+        parts = [f"{tc.id} [{tc.type.value}, {tc.priority.value}] {tc.title} (covers {', '.join(tc.covers)})"]
+        if tc.preconditions:
+            parts.append("Preconditions: " + "; ".join(tc.preconditions))
+        parts.append("Steps: " + " ".join(f"{i}. {s}" for i, s in enumerate(tc.steps, 1)))
+        if tc.test_data:
+            parts.append("Test data: " + json.dumps(tc.test_data, ensure_ascii=False))
+        parts.append(f"Expected: {tc.expected_result}")
+        blocks.append("\n".join(parts))
+    return "\n\n".join(blocks)
+
+
+def questions_text(suite: TestSuite) -> str:
+    lines = [f"- {q}" for q in suite.clarification_questions]
+    lines += [f"- {ac} is untestable as written: {why}" for ac, why in suite.untestable_acs.items()]
+    return "\n".join(lines) or "(none raised)"

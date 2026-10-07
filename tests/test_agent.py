@@ -124,6 +124,35 @@ def test_agent_runs_full_loop_and_fixes_gaps(kb):
     assert "Domain knowledge:" in plan_prompt and "[" in plan_prompt
 
 
+class ScriptedR4InventsThreshold(ScriptedR4):
+    """The LLM ignores the untestable flag on R4-AC6 at every stage."""
+
+    def __call__(self, schema, system, user):
+        out = super().__call__(schema, system, user)
+        if schema is Plan:
+            out.conditions.append(cond("C6", "R4-AC6"))
+        if schema is GeneratedTests:
+            out.test_cases.append(case("T6", "R4-AC6", "C6", expected="downgrade > 3 notches is flagged"))
+            out.test_cases[0].covers.append("R4-AC6")
+        if schema is Review and out.missing_conditions:
+            out.missing_conditions.append(cond("C91", "R4-AC6"))
+        if schema is Revision:
+            out.test_cases.append(case("T91", "R4-AC6", "C91"))
+        return out
+
+
+def test_agent_never_keeps_tests_for_untestable_acs(kb):
+    req = load_requirement("R4")
+    llm = FakeLLM(ScriptedR4InventsThreshold())
+    result = run_agent(req, llm=llm, kb=kb)
+    assert all("R4-AC6" not in tc.covers for tc in result.suite.test_cases)
+    assert len(result.suite.test_cases) == 6  # same as the clean run: T6 and T91 dropped, T1 kept
+    assert "dropped 1 for untestable ACs" in result.trace[2]["summary"]  # plan
+    assert "dropped 1 for untestable ACs" in result.trace[3]["summary"]  # generate
+    review_prompt = next(c for c in llm.calls if c["schema"] == "Review")["user"]
+    assert "Untestable acceptance criteria (no tests until clarified): R4-AC6" in review_prompt
+
+
 def test_agent_stops_at_iteration_limit(kb):
     llm = FakeLLM(ScriptedR4(reviews_with_issues=99))
     result = run_agent(load_requirement("R4"), llm=llm, kb=kb)

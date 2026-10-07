@@ -95,12 +95,40 @@ def _dump(items: list[BaseModel]) -> str:
 
 
 def _gaps(state: AgentState, tests: list[AgentTestCase], plan: Plan) -> tuple[list[str], list[str]]:
-    untestable = {u.ac_id for u in state["analysis"].untestable_acs}
+    untestable = _untestable(state)
     covered_acs = {ac for t in tests for ac in t.covers}
     covered_conditions = {c for t in tests for c in t.condition_ids}
     uncovered_acs = [ac for ac in state["requirement"].ac_ids if ac not in covered_acs and ac not in untestable]
     uncovered_conditions = [c.id for c in plan.conditions if c.id not in covered_conditions]
     return uncovered_acs, uncovered_conditions
+
+
+def _untestable(state: AgentState) -> set[str]:
+    return {u.ac_id for u in state["analysis"].untestable_acs}
+
+
+def _untestable_text(state: AgentState) -> str:
+    return ", ".join(sorted(_untestable(state))) or "none"
+
+
+def _testable_conditions(conditions: list[TestCondition], untestable: set[str]) -> list[TestCondition]:
+    """Drop conditions that only exercise untestable ACs (they would need invented rules)."""
+    kept = []
+    for c in conditions:
+        acs = [a for a in c.ac_ids if a not in untestable]
+        if acs:
+            kept.append(c.model_copy(update={"ac_ids": acs}))
+    return kept
+
+
+def _testable_tests(tests: list[AgentTestCase], untestable: set[str]) -> list[AgentTestCase]:
+    """Drop tests that only cover untestable ACs; strip untestable ids from the rest."""
+    kept = []
+    for t in tests:
+        covers = [a for a in t.covers if a not in untestable]
+        if covers:
+            kept.append(t.model_copy(update={"covers": covers}))
+    return kept
 
 
 def build_agent(llm: StructuredLLM, kb: KnowledgeBase, max_iterations: int | None = None):
@@ -137,11 +165,13 @@ def build_agent(llm: StructuredLLM, kb: KnowledgeBase, max_iterations: int | Non
 
     def plan(state: AgentState) -> AgentState:
         req = state["requirement"]
-        untestable = ", ".join(u.ac_id for u in state["analysis"].untestable_acs) or "none"
         result = invoke_structured(
             llm, Plan, prompts.PLAN_SYSTEM,
-            prompts.PLAN_USER.format(requirement=req.to_prompt_text(), untestable=untestable, context=_context(state["chunks"])),
+            prompts.PLAN_USER.format(requirement=req.to_prompt_text(), untestable=_untestable_text(state),
+                                     context=_context(state["chunks"])),
         )
+        planned = len(result.conditions)
+        result = result.model_copy(update={"conditions": _testable_conditions(result.conditions, _untestable(state))})
         by_type: dict[str, int] = {}
         for c in result.conditions:
             by_type[c.type] = by_type.get(c.type, 0) + 1
@@ -150,7 +180,9 @@ def build_agent(llm: StructuredLLM, kb: KnowledgeBase, max_iterations: int | Non
             "trace": [{
                 "step": "plan",
                 "summary": f"{len(result.conditions)} test condition(s) {by_type}; "
-                           f"skipped existing: {', '.join(result.skipped_existing) or 'none'}",
+                           f"skipped existing: {', '.join(result.skipped_existing) or 'none'}"
+                           + (f"; dropped {planned - len(result.conditions)} for untestable ACs"
+                              if planned > len(result.conditions) else ""),
                 "detail": result.model_dump(),
             }],
         }
@@ -163,9 +195,14 @@ def build_agent(llm: StructuredLLM, kb: KnowledgeBase, max_iterations: int | Non
                 requirement=req.to_prompt_text(), plan=_dump(state["plan"].conditions), context=_context(state["chunks"])
             ),
         )
+        tests = _testable_tests(result.test_cases, _untestable(state))
+        dropped = len(result.test_cases) - len(tests)
         return {
-            "tests": result.test_cases,
-            "trace": [{"step": "generate", "summary": f"{len(result.test_cases)} test case(s) written", "detail": {}}],
+            "tests": tests,
+            "trace": [{"step": "generate",
+                       "summary": f"{len(tests)} test case(s) written"
+                                  + (f"; dropped {dropped} for untestable ACs" if dropped else ""),
+                       "detail": {}}],
         }
 
     def review(state: AgentState) -> AgentState:
@@ -173,9 +210,12 @@ def build_agent(llm: StructuredLLM, kb: KnowledgeBase, max_iterations: int | Non
         result = invoke_structured(
             llm, Review, prompts.REVIEW_SYSTEM,
             prompts.REVIEW_USER.format(
-                requirement=req.to_prompt_text(), tests=_dump(state["tests"]), context=_context(state["chunks"])
+                requirement=req.to_prompt_text(), untestable=_untestable_text(state), tests=_dump(state["tests"]),
+                context=_context(state["chunks"]),
             ),
         )
+        result = result.model_copy(
+            update={"missing_conditions": _testable_conditions(result.missing_conditions, _untestable(state))})
         uncovered_acs, uncovered_conditions = _gaps(state, state["tests"], state["plan"])
         return {
             "review": result,
@@ -203,6 +243,7 @@ def build_agent(llm: StructuredLLM, kb: KnowledgeBase, max_iterations: int | Non
             llm, Revision, prompts.REVISE_SYSTEM,
             prompts.REVISE_USER.format(
                 requirement=req.to_prompt_text(),
+                untestable=_untestable_text(state),
                 tests=_dump(state["tests"]),
                 issues=_dump(r.issues) if r.issues else "none",
                 missing=_dump(r.missing_conditions) if r.missing_conditions else "none",
@@ -213,8 +254,9 @@ def build_agent(llm: StructuredLLM, kb: KnowledgeBase, max_iterations: int | Non
         )
         removed = set(result.remove_test_ids)
         tests = {t.id: t for t in state["tests"] if t.id not in removed}
-        replaced = [t.id for t in result.test_cases if t.id in tests]
-        for t in result.test_cases:
+        revised = _testable_tests(result.test_cases, _untestable(state))
+        replaced = [t.id for t in revised if t.id in tests]
+        for t in revised:
             tests[t.id] = t
         # missing conditions become part of the plan so coverage of them is tracked
         plan = Plan(
@@ -228,7 +270,7 @@ def build_agent(llm: StructuredLLM, kb: KnowledgeBase, max_iterations: int | Non
             "trace": [{
                 "step": "revise",
                 "summary": f"iteration {state['iterations'] + 1}: {len(replaced)} replaced, "
-                           f"{len(result.test_cases) - len(replaced)} added, {len(removed)} removed",
+                           f"{len(revised) - len(replaced)} added, {len(removed)} removed",
                 "detail": {"replaced": replaced, "removed": sorted(removed)},
             }],
         }

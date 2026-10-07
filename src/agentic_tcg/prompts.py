@@ -63,11 +63,14 @@ REVIEW_SYSTEM = f"""{AGENT_ROLE} You are reviewing test cases written by a colle
 Report only real problems:
 - An expected result that contradicts the requirement or domain rules, or is not supported by them (check arithmetic such as notch counts and ranks).
 - A vague expected result that cannot be verified.
-- A test that duplicates an existing regression test.
+- A test that duplicates an existing regression test, or another test in this suite.
 - missing_conditions: important cases that no test covers (use new ids such as C90, C91).
+Never ask for tests of the untestable acceptance criteria; they are waiting for clarification.
 Return empty lists if the tests are good."""
 
 REVIEW_USER = """{requirement}
+
+Untestable acceptance criteria (no tests until clarified): {untestable}
 
 Test cases:
 {tests}
@@ -80,9 +83,12 @@ REVISE_SYSTEM = f"""{AGENT_ROLE} Revise the test cases to fix the review finding
 - To fix a test, return a replacement that keeps the same id.
 - Add new tests for missing conditions and uncovered acceptance criteria.
 - To drop a test (e.g. a duplicate of a regression test), list its id in remove_test_ids.
-- Return only changed or new tests. Use only facts from the requirement and the domain knowledge."""
+- Return only changed or new tests. Use only facts from the requirement and the domain knowledge.
+- Never write tests for the untestable acceptance criteria."""
 
 REVISE_USER = """{requirement}
+
+Untestable acceptance criteria (no tests until clarified): {untestable}
 
 Current test cases:
 {tests}

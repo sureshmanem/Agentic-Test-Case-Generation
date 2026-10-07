@@ -38,7 +38,7 @@ Status: ⬜ Not started · 🟡 In progress · ✅ Done
 | 3 | `TestCase` model + renderers (JSON/table, Gherkin, pytest) | ✅ |
 | 4 | Baseline single-prompt generator | ✅ |
 | 5 | LangGraph agent (analyse → retrieve → plan → generate → self-check → traceability) | ✅ |
-| 6 | Evaluation suite (DeepEval + Ragas), agent vs. baseline report | ⬜ |
+| 6 | Evaluation suite (DeepEval + Ragas), agent vs. baseline report | ✅ |
 | 7 | Streamlit demo | ⬜ |
 | 8 | Wrap-up: README results, optional CI quality gate | ⬜ |
 
@@ -119,10 +119,29 @@ graph TD;
 
 Run: `uv run python -m agentic_tcg.generate [--mode baseline|agent|both] [-r R1,R4]`
 
-### Step 6: Evaluation ⬜
-- DeepEval: Faithfulness, Hallucination, `GEval` coverage, `GEval` test quality, AC coverage vs. golden.
-- Ragas: `faithfulness`, `context_precision`, `context_recall`.
-- Output: `reports/comparison.md` (agent vs. baseline per requirement + overall).
+### Step 6: Evaluation ✅
+Run: `uv run python -m agentic_tcg.evaluate [-r R1,R4] [--repeats 3] [--no-deepeval] [--no-ragas]` (reads `outputs/`, writes `reports/results.json` and `reports/comparison.md`).
+
+| Metric | Kind | What it measures |
+|---|---|---|
+| `ac_coverage` | deterministic | Share of testable ACs (per the **golden** untestable list, so it cannot be gamed) with at least one test |
+| `test_type_diversity` | deterministic | Distinct test types used / 4 |
+| `unknown_ac_references` | deterministic | Tests citing AC ids that do not exist (lower is better) |
+| `golden_scenario_recall` | LLM verdict per golden test | Share of the golden scenarios covered **with a matching expected result** |
+| `golden_conflicts` | LLM verdict per golden test | Golden scenarios matched by a test that expects a different outcome (lower is better) |
+| `ambiguity_detection` | LLM verdict per expected item | Share of expected ambiguities / untestable ACs that were raised |
+| `faithfulness` | DeepEval `FaithfulnessMetric` | Claims consistent with the reference context (requirement + its referenced knowledge docs) |
+| `no_hallucination` | DeepEval `HallucinationMetric` | 1.0 = nothing contradicts the reference context |
+| `test_quality` | DeepEval `GEval` | Clear steps, concrete data, verifiable results, correct types, no duplicates |
+| `ragas_faithfulness` | Ragas | Claims supported by what the generator saw (penalises invented test data such as issuer ids) |
+| `ragas_context_recall` | Ragas | Golden-test facts supported by the generator context (baseline: requirement only; agent: + retrieval) |
+| `ragas_context_precision` | Ragas (agent only) | Relevance of the retrieved chunks |
+
+Judge model: `gpt-4.1-mini`. Success criteria: agent AC coverage ≥ 0.8, faithfulness ≥ 0.85, both above the baseline, plus golden scenario recall ≥ 0.8 and above the baseline (added after the first live run, see change log).
+
+**Live check on R4 (2026-10-07, single judgement):** baseline vs. agent: golden scenario recall 0.40 vs 1.00; faithfulness 0.53 vs 1.00; no_hallucination 0.75 vs 1.00; test quality 0.93 vs 0.90; ambiguity detection 0.50 vs 0.50; tests 15 vs 26; LLM calls 1 vs 6; time 11 s vs 39 s. The agent wrote no tests for the untestable R4-AC6.
+
+Tests: `tests/test_evaluate.py` (deterministic metrics, verdict counting, report and criteria, repeats, offline judge construction); live tests with `uv run pytest -m llm`. **55 offline + 3 live pass.**
 
 ### Step 7: Streamlit Demo ⬜
 Pick a requirement → generated tests (table / Gherkin / pytest) → traceability matrix → agent trace → scores vs. baseline.
@@ -145,3 +164,10 @@ README run instructions + results summary; optional GitHub Actions `deepeval tes
 | 2026-10-06 | Step 3 completed. Generated pytest files are skeletons (data, steps and expected result embedded, with a TODO to call the system under test), because no real system under test exists in the prototype. |
 | 2026-10-06 | Step 4 completed. LLM output schemas are separate from the domain models: OpenAI strict mode forbids open `dict` fields, so `test_data` is returned as a JSON string and parsed. Schemas are checked against the OpenAI SDK `to_strict_json_schema` converter. |
 | 2026-10-06 | Step 5 completed. The self-check combines an LLM review with a deterministic coverage check (ACs and planned conditions without tests), so gaps are found reliably. The knowledge base is in-memory and rebuilt on each run instead of persisted, which avoids stale indexes (`.chroma/` is no longer needed). |
+| 2026-10-06 | Step 6 completed. API key provided, so live tests are now opt-in (`pytest -m llm`); 3 live tests pass. |
+| 2026-10-07 | First live run (R4) fixes: (1) Ragas judge raised `max_tokens` to 16000 (default 1024 truncated output). (2) DeepEval `HallucinationMetric` now scores 1 = pass; reported as `no_hallucination` (higher is better). |
+| 2026-10-07 | Holistic `GEval` metrics for golden recall and ambiguity detection **replaced by per-item LLM verdicts**. On R4 the GEval judge said the agent lacked default-rating boundary tests it actually had, and gave the baseline a higher score despite wrong notch arithmetic (upgrade of −2, downgrade of +2). Per-item verdicts are countable and list the missed and conflicting golden tests. |
+| 2026-10-07 | Agent bug found live: it marked R4-AC6 untestable but still wrote 9 tests with an invented "large downgrade" threshold. Fix: untestable ACs are enforced in code (plan, generate, review, revise drop conditions/tests that only cover them) and passed to the review/revise prompts; the review also checks for duplicates within the suite. Re-run: 0 tests for R4-AC6. |
+| 2026-10-07 | Removed the literal `untestable_ac_flagged` check (it missed concerns raised without the AC id); `ambiguity_detection` covers it. |
+| 2026-10-07 | **Success criteria extended** (originals kept): golden scenario recall ≥ 0.8 and above the baseline. Reason: AC coverage saturates at 100% for both modes, so it cannot tell them apart. |
+| 2026-10-07 | Judge variance observed: re-judging the same R4 outputs moved baseline faithfulness 0.92 → 0.53. Added `--repeats N` to average judgements; final numbers should use `--repeats 3`. |

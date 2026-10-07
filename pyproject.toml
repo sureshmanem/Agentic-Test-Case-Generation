@@ -33,6 +33,8 @@ packages = ["src/agentic_tcg"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_default_fixture_loop_scope = "function"
+# Live OpenAI tests are opt-in: uv run pytest -m llm
+addopts = "-m 'not llm'"
 markers = [
     "llm: needs OPENAI_API_KEY and calls the OpenAI API (deselect with -m 'not llm')",
 ]
