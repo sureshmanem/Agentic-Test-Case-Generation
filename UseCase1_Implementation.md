@@ -35,7 +35,7 @@ Status: ⬜ Not started · 🟡 In progress · ✅ Done
 | 0 | Environment setup (uv, git, GitHub repo) | ✅ |
 | 1 | Synthetic ratings requirements, golden test sets, knowledge base | ✅ |
 | 2 | Project scaffold (dependencies, package layout, config, `.env.example`) | ✅ |
-| 3 | `TestCase` model + renderers (JSON/table, Gherkin, pytest) | ⬜ |
+| 3 | `TestCase` model + renderers (JSON/table, Gherkin, pytest) | ✅ |
 | 4 | Baseline single-prompt generator | ⬜ |
 | 5 | LangGraph agent (analyse → retrieve → plan → generate → self-check → traceability) | ⬜ |
 | 6 | Evaluation suite (DeepEval + Ragas), agent vs. baseline report | ⬜ |
@@ -83,8 +83,11 @@ Traps built in to show the agent's value over a single prompt:
 - `src/agentic_tcg/config.py`: paths + `Settings` (models, self-check iterations, retrieval k) from env / `.env`.
 - `.env.example`: template for `OPENAI_API_KEY` and model overrides. `.chroma/` and `outputs/` are gitignored.
 
-### Step 3: Test Case Model + Renderers ⬜
-Pydantic `TestCase` (id, title, type, priority, preconditions, steps, test_data, expected_result, covers) → JSON/table, Gherkin `.feature`, pytest skeleton.
+### Step 3: Test Case Model + Renderers ✅
+- `src/agentic_tcg/models.py`: Pydantic `Requirement`, `TestCase`, `TestSuite` (test cases + `clarification_questions` + `untestable_acs`), `GoldenSet`; loaders for requirements, golden sets and knowledge docs.
+- `src/agentic_tcg/traceability.py`: requirement-to-test matrix (COVERED / NOT_COVERED / UNTESTABLE), coverage %, unknown AC references.
+- `src/agentic_tcg/renderers.py`: Markdown/table rows, Gherkin `.feature` (tags: test id, type, priority, AC ids), pytest skeletons (test data embedded; the call to the system under test is a TODO and the test skips until implemented).
+- `tests/test_models_renderers.py`: 29 offline tests. They check that the golden sets give 100% coverage, the generated pytest parses and runs, and the Gherkin has one scenario per test. **All pass.**
 
 ### Step 4: Baseline ⬜
 Single `gpt-4.1` prompt: requirement → test cases (same schema).
@@ -121,3 +124,4 @@ README run instructions + results summary; optional GitHub Actions `deepeval tes
 | 2026-10-06 | Step 1 completed: 8 requirements, 75 golden tests, 6 knowledge docs, validation script. Golden files gained an `untestable_acs` field (used by R4-AC6) so evaluation can tell intentionally untestable criteria apart from real coverage gaps. |
 | 2026-10-06 | Golden test case schema fixed (id, title, type, priority, preconditions, steps, test_data, expected_result, covers). Step 3's Pydantic `TestCase` will use the same shape. |
 | 2026-10-06 | Step 2 completed. Ragas 0.4.3 metrics are used through the new `ragas.metrics.collections` API (`llm_factory` + `ascore`), confirmed against the installed package. Offline unit tests with fake LLM/embeddings added to the plan, because the API key is only available after Step 8. |
+| 2026-10-06 | Step 3 completed. Generated pytest files are skeletons (data, steps and expected result embedded, with a TODO to call the system under test), because no real system under test exists in the prototype. |

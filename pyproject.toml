@@ -32,6 +32,11 @@ packages = ["src/agentic_tcg"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_default_fixture_loop_scope = "function"
 markers = [
     "llm: needs OPENAI_API_KEY and calls the OpenAI API (deselect with -m 'not llm')",
 ]
+
+[tool.uv]
+# .venv lives on an external volume; hard-linking from the uv cache is not supported there
+link-mode = "copy"
