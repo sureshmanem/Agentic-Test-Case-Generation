@@ -111,7 +111,7 @@ Then every `generate`, `evaluate` and app run is traced to LangSmith:
 ## Tests and CI
 
 ```bash
-uv run pytest                 # 73 offline tests (fake LLM and embeddings), no API key needed
+uv run pytest                 # 74 offline tests (fake LLM and embeddings), no API key needed
 uv run pytest -m llm          # live OpenAI tests (opt-in)
 uv run python scripts/validate_data.py
 ```
