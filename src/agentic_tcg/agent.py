@@ -44,6 +44,8 @@ class TestCondition(BaseModel):
 class Plan(BaseModel):
     conditions: list[TestCondition]
     skipped_existing: list[str] = Field(description="Existing regression test ids that already cover a condition")
+    untestable_acs: list[LLMUntestable] = Field(
+        description="Acceptance criteria that remain untestable after reading the domain knowledge")
 
 
 class AgentTestCase(LLMTestCase):
@@ -75,6 +77,7 @@ class Revision(BaseModel):
 class AgentState(TypedDict, total=False):
     requirement: Requirement
     analysis: Analysis
+    untestable: dict[str, str]  # AC id -> reason; provisional after analyse, confirmed by plan
     chunks: list[Chunk]
     plan: Plan
     tests: list[AgentTestCase]
@@ -104,7 +107,7 @@ def _gaps(state: AgentState, tests: list[AgentTestCase], plan: Plan) -> tuple[li
 
 
 def _untestable(state: AgentState) -> set[str]:
-    return {u.ac_id for u in state["analysis"].untestable_acs}
+    return set(state["untestable"])
 
 
 def _untestable_text(state: AgentState) -> str:
@@ -141,6 +144,7 @@ def build_agent(llm: StructuredLLM, kb: KnowledgeBase, max_iterations: int | Non
         )
         return {
             "analysis": analysis,
+            "untestable": {u.ac_id: u.reason for u in analysis.untestable_acs},
             "iterations": 0,
             "trace": [{
                 "step": "analyse",
@@ -170,17 +174,24 @@ def build_agent(llm: StructuredLLM, kb: KnowledgeBase, max_iterations: int | Non
             prompts.PLAN_USER.format(requirement=req.to_prompt_text(), untestable=_untestable_text(state),
                                      context=_context(state["chunks"])),
         )
+        # the plan step has the domain knowledge, so its view of untestable ACs replaces the provisional one
+        known = set(req.ac_ids)
+        untestable = {u.ac_id: u.reason for u in result.untestable_acs if u.ac_id in known}
+        cleared = sorted(set(state["untestable"]) - set(untestable))
         planned = len(result.conditions)
-        result = result.model_copy(update={"conditions": _testable_conditions(result.conditions, _untestable(state))})
+        result = result.model_copy(update={"conditions": _testable_conditions(result.conditions, set(untestable))})
         by_type: dict[str, int] = {}
         for c in result.conditions:
             by_type[c.type] = by_type.get(c.type, 0) + 1
         return {
             "plan": result,
+            "untestable": untestable,
             "trace": [{
                 "step": "plan",
                 "summary": f"{len(result.conditions)} test condition(s) {by_type}; "
                            f"skipped existing: {', '.join(result.skipped_existing) or 'none'}"
+                           + (f"; untestable after knowledge check: {', '.join(sorted(untestable)) or 'none'}")
+                           + (f" (cleared {', '.join(cleared)})" if cleared else "")
                            + (f"; dropped {planned - len(result.conditions)} for untestable ACs"
                               if planned > len(result.conditions) else ""),
                 "detail": result.model_dump(),
@@ -262,6 +273,7 @@ def build_agent(llm: StructuredLLM, kb: KnowledgeBase, max_iterations: int | Non
         plan = Plan(
             conditions=[*state["plan"].conditions, *r.missing_conditions],
             skipped_existing=state["plan"].skipped_existing,
+            untestable_acs=state["plan"].untestable_acs,
         )
         return {
             "tests": list(tests.values()),
@@ -282,7 +294,7 @@ def build_agent(llm: StructuredLLM, kb: KnowledgeBase, max_iterations: int | Non
             requirement_id=req.id,
             test_cases=cases,
             clarification_questions=analysis.clarification_questions,
-            untestable_acs={u.ac_id: u.reason for u in analysis.untestable_acs},
+            untestable_acs=dict(state["untestable"]),
         )
         open_items = needs_revision(state)
         return {

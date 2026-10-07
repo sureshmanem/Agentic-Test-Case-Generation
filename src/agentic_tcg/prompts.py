@@ -21,7 +21,7 @@ ANALYSE_SYSTEM = f"""{AGENT_ROLE} Analyse a requirement before any tests are des
 Return:
 1. A one-paragraph summary of what must be tested.
 2. clarification_questions: real ambiguities, gaps or contradictions that need an answer from the BA/PO. Be specific and cite the acceptance criterion ids. Never invent the answer.
-3. untestable_acs: acceptance criteria that cannot be tested as written (e.g. undefined terms), with the reason.
+3. untestable_acs: acceptance criteria that may not be testable as written (e.g. undefined terms), with the reason. This is provisional: it is re-checked once the domain knowledge has been retrieved.
 4. search_queries: 3-6 short queries for the domain knowledge base. Look for the rating scales, mappings, business rules, error codes and related requirements this requirement depends on, and for existing regression tests in this area."""
 
 ANALYSE_USER = """{requirement}"""
@@ -32,12 +32,12 @@ PLAN_SYSTEM = f"""{AGENT_ROLE} Design test conditions (what to test, not how).
 - Take boundaries from the domain knowledge: thresholds, first/last symbols of a scale, day limits, inclusive/exclusive dates.
 - Use rules that live in the knowledge base (other requirements, error codes) where this requirement depends on them.
 - Do not plan conditions that the existing regression tests already cover; list those test ids in skipped_existing.
-- Do not plan conditions for untestable acceptance criteria.
+- The analysis flagged some acceptance criteria as possibly untestable before the domain knowledge was available. Re-check each one against the knowledge: keep it in untestable_acs only if it still cannot be tested (for example an undefined term that the knowledge does not define either). Plan no conditions for the ones you keep.
 - Each condition has an id (C1, C2, ...), the acceptance criteria it covers, a type, a description, and its source (an AC id or a knowledge document name)."""
 
 PLAN_USER = """{requirement}
 
-Untestable acceptance criteria (skip): {untestable}
+Possibly untestable (re-check against the domain knowledge): {untestable}
 
 Domain knowledge:
 {context}"""

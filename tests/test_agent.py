@@ -53,7 +53,8 @@ class ScriptedR4:
                 search_queries=["notch change ordinal", "rating action error codes"],
             )
         if schema is Plan:
-            return Plan(conditions=[cond(f"C{i}", f"R4-AC{i}") for i in range(1, 6)], skipped_existing=["REG-301"])
+            return Plan(conditions=[cond(f"C{i}", f"R4-AC{i}") for i in range(1, 6)], skipped_existing=["REG-301"],
+                        untestable_acs=[LLMUntestable(ac_id="R4-AC6", reason="'large' undefined")])
         if schema is GeneratedTests:
             tests = [case(f"T{i}", f"R4-AC{i}", f"C{i}") for i in range(1, 5)]
             tests[2] = case("T3", "R4-AC3", "C3", expected="notch_change = -3")  # wrong: should be -2
@@ -151,6 +152,26 @@ def test_agent_never_keeps_tests_for_untestable_acs(kb):
     assert "dropped 1 for untestable ACs" in result.trace[3]["summary"]  # generate
     review_prompt = next(c for c in llm.calls if c["schema"] == "Review")["user"]
     assert "Untestable acceptance criteria (no tests until clarified): R4-AC6" in review_prompt
+
+
+class ScriptedR4OverFlags(ScriptedR4):
+    """Analysis wrongly flags R4-AC3 (notch ordinals are in the knowledge base); the plan step clears it."""
+
+    def __call__(self, schema, system, user):
+        out = super().__call__(schema, system, user)
+        if schema is Analysis:
+            out.untestable_acs.append(LLMUntestable(ac_id="R4-AC3", reason="ordinal positions not given"))
+        return out
+
+
+def test_plan_step_rechecks_untestable_acs_against_knowledge(kb):
+    llm = FakeLLM(ScriptedR4OverFlags())
+    result = run_agent(load_requirement("R4"), llm=llm, kb=kb)
+    plan_prompt = next(c for c in llm.calls if c["schema"] == "Plan")["user"]
+    assert "Possibly untestable (re-check against the domain knowledge): R4-AC3, R4-AC6" in plan_prompt
+    assert "cleared R4-AC3" in result.trace[2]["summary"]
+    assert result.suite.untestable_acs == {"R4-AC6": "'large' undefined"}
+    assert any("R4-AC3" in tc.covers for tc in result.suite.test_cases)
 
 
 def test_agent_stops_at_iteration_limit(kb):

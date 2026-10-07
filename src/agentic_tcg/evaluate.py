@@ -195,7 +195,7 @@ class AmbiguityJudgement(BaseModel):
 SCENARIO_SYSTEM = """You compare a candidate test suite with reference test cases written by a senior QA engineer.
 Return one verdict per reference test case, in order.
 - covered: a candidate test checks the same scenario (same condition and same kind of input). Wording, ids and exact data may differ.
-- conflicting_expectation: a matching candidate test expects a different outcome than the reference (different value, sign, status or error code). Check the arithmetic.
+- conflicting_expectation: true ONLY if a matching candidate test uses equivalent inputs and expects a different outcome than the reference (different value, sign, status or error code). Different input data is never a conflict by itself: when the inputs differ, decide only whether the scenario is covered and leave conflicting_expectation false. Check the arithmetic.
 - note: one short sentence."""
 
 AMBIGUITY_SYSTEM = """You check whether a candidate raised known ambiguities in a requirement.
