@@ -10,6 +10,7 @@ __pycache__/
 # Secrets
 .env
 .env.*
+!.env.example
 
 # DeepEval / Ragas local caches
 .deepeval/
