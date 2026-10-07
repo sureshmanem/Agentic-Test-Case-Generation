@@ -37,7 +37,7 @@ Status: ⬜ Not started · 🟡 In progress · ✅ Done
 | 2 | Project scaffold (dependencies, package layout, config, `.env.example`) | ✅ |
 | 3 | `TestCase` model + renderers (JSON/table, Gherkin, pytest) | ✅ |
 | 4 | Baseline single-prompt generator | ✅ |
-| 5 | LangGraph agent (analyse → retrieve → plan → generate → self-check → traceability) | ⬜ |
+| 5 | LangGraph agent (analyse → retrieve → plan → generate → self-check → traceability) | ✅ |
 | 6 | Evaluation suite (DeepEval + Ragas), agent vs. baseline report | ⬜ |
 | 7 | Streamlit demo | ⬜ |
 | 8 | Wrap-up: README results, optional CI quality gate | ⬜ |
@@ -95,14 +95,29 @@ Traps built in to show the agent's value over a single prompt:
 - `src/agentic_tcg/baseline.py`: `generate_baseline(requirement, llm)` makes **one LLM call** with the requirement only (plus the OpenAPI attachment for R8) and **no retrieval**.
 - `tests/fakes.py`: `FakeLLM` that mimics `with_structured_output().invoke()`. `tests/test_baseline.py`: strict-schema compatibility check (verified to reject a non-compliant schema), conversion, and a live test marked `llm` that is skipped without a key.
 
-### Step 5: LangGraph Agent ⬜
+### Step 5: LangGraph Agent ✅
+```mermaid
+graph TD;
+  start([start]) --> analyse --> retrieve --> plan --> generate --> review
+  review -. findings and iterations < 2 .-> revise --> review
+  review -. clean or limit reached .-> finalize --> stop([end])
 ```
-analyse → retrieve (Chroma) → plan conditions → generate → self-check ──gaps?──┐
-                                                    ▲                          │
-                                                    └───────── regenerate ─────┘
-                                                               no gaps → traceability matrix → render
-```
-Self-check loop capped at 2 iterations.
+
+| Node | What it does | LLM call |
+|---|---|---|
+| analyse | Summary, clarification questions, untestable ACs, knowledge-base search queries | yes |
+| retrieve | Chroma search (requirement + queries), best unique chunks (max 8) | no (embeddings) |
+| plan | Test conditions per AC (type, source); skips conditions covered by existing regression tests | yes |
+| generate | Test cases for the conditions, using only requirement + knowledge facts | yes |
+| review | QA-lead review (wrong/vague results, duplicates, missing conditions) **plus** deterministic gap check (uncovered ACs/conditions) | yes |
+| revise | Replace, add or remove tests; missing conditions join the plan | yes |
+| finalize | Domain `TestSuite`, ids renumbered, notes any open findings | no |
+
+- Files: `retriever.py` (in-memory Chroma, markdown split by heading, OpenAI `text-embedding-3-small`), `agent.py`, `pipeline.py` (`run_baseline`, `run_agent`, `save_result` → `outputs/<mode>/`: JSON, `.feature`, pytest, Markdown with traceability), `generate.py` CLI.
+- Typical cost: 5 LLM calls (no revision) to 9 (two revisions) per requirement, compared with 1 for the baseline. Calls are counted and recorded in each result.
+- `tests/test_agent.py`: strict-schema checks for all node schemas, the knowledge-base search, a full scripted run (gap found → revised → 100% coverage, untestable AC kept), the iteration cap, save/load, and the diagram. **All offline tests pass (42); 2 live tests are skipped until the API key is set.**
+
+Run: `uv run python -m agentic_tcg.generate [--mode baseline|agent|both] [-r R1,R4]`
 
 ### Step 6: Evaluation ⬜
 - DeepEval: Faithfulness, Hallucination, `GEval` coverage, `GEval` test quality, AC coverage vs. golden.
@@ -129,3 +144,4 @@ README run instructions + results summary; optional GitHub Actions `deepeval tes
 | 2026-10-06 | Step 2 completed. Ragas 0.4.3 metrics are used through the new `ragas.metrics.collections` API (`llm_factory` + `ascore`), confirmed against the installed package. Offline unit tests with fake LLM/embeddings added to the plan, because the API key is only available after Step 8. |
 | 2026-10-06 | Step 3 completed. Generated pytest files are skeletons (data, steps and expected result embedded, with a TODO to call the system under test), because no real system under test exists in the prototype. |
 | 2026-10-06 | Step 4 completed. LLM output schemas are separate from the domain models: OpenAI strict mode forbids open `dict` fields, so `test_data` is returned as a JSON string and parsed. Schemas are checked against the OpenAI SDK `to_strict_json_schema` converter. |
+| 2026-10-06 | Step 5 completed. The self-check combines an LLM review with a deterministic coverage check (ACs and planned conditions without tests), so gaps are found reliably. The knowledge base is in-memory and rebuilt on each run instead of persisted, which avoids stale indexes (`.chroma/` is no longer needed). |

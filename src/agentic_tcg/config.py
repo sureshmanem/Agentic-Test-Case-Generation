@@ -13,7 +13,6 @@ GOLDEN_DIR = DATA_DIR / "golden"
 KNOWLEDGE_DIR = DATA_DIR / "knowledge"
 OUTPUTS_DIR = ROOT / "outputs"
 REPORTS_DIR = ROOT / "reports"
-CHROMA_DIR = ROOT / ".chroma"
 
 load_dotenv(ROOT / ".env")
 
