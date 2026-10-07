@@ -1,5 +1,5 @@
 [project]
-name = "deepeval-and-ragas"
+name = "agentic-test-case-generation"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [

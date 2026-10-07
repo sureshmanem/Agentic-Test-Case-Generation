@@ -1,4 +1,4 @@
-# DeepEval & Ragas: Agentic Test Case Generation
+# Agentic Test Case Generation
 
 An agentic AI solution for **Quality Assurance** that generates test cases from requirements. Its output is evaluated with [DeepEval](https://github.com/confident-ai/deepeval) and [Ragas](https://github.com/explodinggradients/ragas).
 
@@ -26,8 +26,8 @@ This project uses [uv](https://docs.astral.sh/uv/) for package management and an
 brew install uv            # or: curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Clone and create the environment from the lock file
-git clone https://github.com/sureshmanem/DeepEval_And_Ragas.git
-cd DeepEval_And_Ragas
+git clone https://github.com/sureshmanem/Agentic-Test-Case-Generation.git
+cd Agentic-Test-Case-Generation
 uv sync
 ```
 
