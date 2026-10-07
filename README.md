@@ -8,7 +8,8 @@ A prototype that shows an **agentic AI workflow writes better test cases from re
 - **Demo:** Streamlit app.
 - **Observability:** optional LangSmith tracing of every agent step, LLM call, retrieval and evaluation, with metric scores attached as feedback.
 
-Design: [UseCase1_Test_Case_Generation.md](UseCase1_Test_Case_Generation.md) · Plan, progress and change log: [UseCase1_Implementation.md](UseCase1_Implementation.md)
+Design: [UseCase1_Test_Case_Generation.md](UseCase1_Test_Case_Generation.md) · Plan, progress and change log: [UseCase1_Implementation.md](UseCase1_Implementation.md)  
+Project explanation: [Explanation.md](Explanation.md) · Interview Q&A: [Interview.md](Interview.md)
 
 ## How It Works
 
@@ -142,6 +143,8 @@ GitHub Actions (`.github/workflows/ci.yml`):
 ├── tests/                              # Offline unit/graph/UI tests + opt-in live tests
 ├── scripts/validate_data.py            # Data consistency checks
 ├── .github/workflows/ci.yml
+├── Explanation.md                      # Project explanation (architecture, results, lessons)
+├── Interview.md                        # Interview Q&A on concepts and architecture
 ├── UseCase1_Test_Case_Generation.md    # Use case design
 └── UseCase1_Implementation.md          # Plan, progress tracker, change log
 ```
