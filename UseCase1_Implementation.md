@@ -34,7 +34,7 @@ Status: ⬜ Not started · 🟡 In progress · ✅ Done
 |---|---|---|
 | 0 | Environment setup (uv, git, GitHub repo) | ✅ |
 | 1 | Synthetic ratings requirements, golden test sets, knowledge base | ✅ |
-| 2 | Project scaffold (dependencies, package layout, config, `.env.example`) | ⬜ |
+| 2 | Project scaffold (dependencies, package layout, config, `.env.example`) | ✅ |
 | 3 | `TestCase` model + renderers (JSON/table, Gherkin, pytest) | ⬜ |
 | 4 | Baseline single-prompt generator | ⬜ |
 | 5 | LangGraph agent (analyse → retrieve → plan → generate → self-check → traceability) | ⬜ |
@@ -77,8 +77,11 @@ Traps built in to show the agent's value over a single prompt:
 - Cross-requirement rules that are only in the knowledge base (e.g. R6 depends on the R2 mapping; R8 depends on the R1/R4 rules)
 - Existing regression tests to avoid duplicating
 
-### Step 2: Project Scaffold ⬜
-`uv add langgraph langchain-openai chromadb streamlit python-dotenv`; package `src/agentic_tcg/`; config for model names; `.env.example`.
+### Step 2: Project Scaffold ✅
+- Dependencies added with uv: `langgraph`, `langchain-openai`, `langchain-chroma`, `chromadb`, `streamlit`, `python-dotenv`, `openai` (dev: `pytest`).
+- `pyproject.toml`: hatchling build system so `src/agentic_tcg` installs as a package; pytest marker `llm` for tests that call OpenAI.
+- `src/agentic_tcg/config.py`: paths + `Settings` (models, self-check iterations, retrieval k) from env / `.env`.
+- `.env.example`: template for `OPENAI_API_KEY` and model overrides. `.chroma/` and `outputs/` are gitignored.
 
 ### Step 3: Test Case Model + Renderers ⬜
 Pydantic `TestCase` (id, title, type, priority, preconditions, steps, test_data, expected_result, covers) → JSON/table, Gherkin `.feature`, pytest skeleton.
@@ -117,3 +120,4 @@ README run instructions + results summary; optional GitHub Actions `deepeval tes
 | 2026-10-06 | Deliberate ambiguities added to some requirements (e.g., R4 "large downgrade") to test whether the agent flags them instead of guessing. |
 | 2026-10-06 | Step 1 completed: 8 requirements, 75 golden tests, 6 knowledge docs, validation script. Golden files gained an `untestable_acs` field (used by R4-AC6) so evaluation can tell intentionally untestable criteria apart from real coverage gaps. |
 | 2026-10-06 | Golden test case schema fixed (id, title, type, priority, preconditions, steps, test_data, expected_result, covers). Step 3's Pydantic `TestCase` will use the same shape. |
+| 2026-10-06 | Step 2 completed. Ragas 0.4.3 metrics are used through the new `ragas.metrics.collections` API (`llm_factory` + `ascore`), confirmed against the installed package. Offline unit tests with fake LLM/embeddings added to the plan, because the API key is only available after Step 8. |
