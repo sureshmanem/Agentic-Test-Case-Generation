@@ -3,6 +3,7 @@
     uv run python -m agentic_tcg.evaluate                  # evaluate saved outputs for all requirements
     uv run python -m agentic_tcg.evaluate -r R4,R6 --no-ragas
     uv run python -m agentic_tcg.evaluate --repeats 3       # average 3 judgements per output
+    uv run python -m agentic_tcg.evaluate --gate            # exit 1 below thresholds (CI)
 
 Reads outputs/<mode>/<R>.json (from `agentic_tcg.generate`). Results are merged into
 reports/results.json (same requirement + mode replaced) and reports/comparison.md is rebuilt.
@@ -324,6 +325,33 @@ def _fmt(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.2f}"
 
 
+def success_criteria(records: list[EvalRecord]) -> list[tuple[str, bool | None, str]]:
+    """(label, passed or None if not measured, detail). Labels marked ² form the CI gate."""
+    a = {n: _avg(records, "agent", n) for n in THRESHOLDS}
+    b = {n: _avg(records, "baseline", n) for n in THRESHOLDS}
+
+    def ge(n: str) -> tuple[bool | None, str]:
+        return (None if a[n] is None else a[n] >= THRESHOLDS[n]), _fmt(a[n])
+
+    def gt(n: str) -> tuple[bool | None, str]:
+        return (None if a[n] is None or b[n] is None else a[n] > b[n]), f"{_fmt(a[n])} vs {_fmt(b[n])}"
+
+    return [
+        (f"Agent AC coverage ≥ {THRESHOLDS['ac_coverage']} ²", *ge("ac_coverage")),
+        (f"Agent faithfulness ≥ {THRESHOLDS['faithfulness']} ²", *ge("faithfulness")),
+        ("Agent coverage > baseline", *gt("ac_coverage")),
+        ("Agent faithfulness > baseline", *gt("faithfulness")),
+        (f"Agent golden scenario recall ≥ {THRESHOLDS['golden_scenario_recall']} ¹ ²", *ge("golden_scenario_recall")),
+        ("Agent golden scenario recall > baseline ¹", *gt("golden_scenario_recall")),
+    ]
+
+
+def gate_passed(records: list[EvalRecord]) -> bool:
+    """CI gate: every measured absolute threshold (²) passes, and at least one was measured."""
+    gated = [ok for label, ok, _ in success_criteria(records) if "²" in label and ok is not None]
+    return bool(gated) and all(gated)
+
+
 def build_report(records: list[EvalRecord]) -> str:
     names: list[str] = []
     lower_better: set[str] = set()
@@ -352,32 +380,12 @@ def build_report(records: list[EvalRecord]) -> str:
         arrow = " (lower is better)" if name in lower_better else ""
         lines.append(f"| {name}{arrow} | {_fmt(b)} | {_fmt(a)} | {_fmt(delta)} | {better} |")
 
-    lines += ["", "## Success criteria", ""]
-    agent_cov, agent_faith = _avg(records, "agent", "ac_coverage"), _avg(records, "agent", "faithfulness")
-    base_cov, base_faith = _avg(records, "baseline", "ac_coverage"), _avg(records, "baseline", "faithfulness")
-    agent_rec, base_rec = _avg(records, "agent", "golden_scenario_recall"), _avg(records, "baseline", "golden_scenario_recall")
-
-    def check(ok: bool | None) -> str:
-        return "n/a" if ok is None else ("✅ pass" if ok else "❌ fail")
-
-    def ge(x: float | None, t: float) -> bool | None:
-        return None if x is None else x >= t
-
-    def gt(x: float | None, y: float | None) -> bool | None:
-        return None if x is None or y is None else x > y
-
-    lines += [
-        "| Criterion | Result |", "|---|---|",
-        f"| Agent AC coverage ≥ {THRESHOLDS['ac_coverage']} | {check(ge(agent_cov, THRESHOLDS['ac_coverage']))} ({_fmt(agent_cov)}) |",
-        f"| Agent faithfulness ≥ {THRESHOLDS['faithfulness']} | {check(ge(agent_faith, THRESHOLDS['faithfulness']))} ({_fmt(agent_faith)}) |",
-        f"| Agent coverage > baseline | {check(gt(agent_cov, base_cov))} ({_fmt(agent_cov)} vs {_fmt(base_cov)}) |",
-        f"| Agent faithfulness > baseline | {check(gt(agent_faith, base_faith))} ({_fmt(agent_faith)} vs {_fmt(base_faith)}) |",
-        f"| Agent golden scenario recall ≥ {THRESHOLDS['golden_scenario_recall']} ¹ | {check(ge(agent_rec, THRESHOLDS['golden_scenario_recall']))} ({_fmt(agent_rec)}) |",
-        f"| Agent golden scenario recall > baseline ¹ | {check(gt(agent_rec, base_rec))} ({_fmt(agent_rec)} vs {_fmt(base_rec)}) |",
-        "",
-        "¹ Added after the first live run: AC coverage only needs one test per criterion, so both modes reach 100% "
-        "and it cannot tell them apart. Scenario recall measures coverage against the 75 golden tests.",
-    ]
+    lines += ["", "## Success criteria", "", "| Criterion | Result |", "|---|---|"]
+    for label, ok, detail in success_criteria(records):
+        lines.append(f"| {label} | {'n/a' if ok is None else ('✅ pass' if ok else '❌ fail')} ({detail}) |")
+    lines += ["", "¹ Added after the first live run: AC coverage only needs one test per criterion, so both modes reach "
+              "100% and it cannot tell them apart. Scenario recall measures coverage against the 75 golden tests.",
+              "² Used by the CI quality gate (`--gate`)."]
 
     key = [n for n in ["ac_coverage", "golden_scenario_recall", "golden_conflicts", "faithfulness", "no_hallucination", "ambiguity_detection", "test_quality"] if n in names]
     lines += ["", "## Per requirement (baseline → agent)", "",
@@ -440,6 +448,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-deepeval", action="store_true")
     parser.add_argument("--no-ragas", action="store_true")
     parser.add_argument("--repeats", type=int, default=1, help="Judge each output N times and average (default 1)")
+    parser.add_argument("--gate", action="store_true", help="Exit 1 if the agent misses an absolute threshold (for CI)")
     args = parser.parse_args(argv)
 
     if not get_settings().has_api_key and not (args.no_deepeval and args.no_ragas):
@@ -462,6 +471,9 @@ def main(argv: list[str] | None = None) -> int:
 
     all_records = update_reports(records)
     print(build_report(all_records))
+    if args.gate and not gate_passed(records):
+        print("Quality gate FAILED", file=sys.stderr)
+        return 1
     return 0
 
 

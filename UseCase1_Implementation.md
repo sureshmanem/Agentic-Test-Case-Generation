@@ -40,7 +40,7 @@ Status: ⬜ Not started · 🟡 In progress · ✅ Done
 | 5 | LangGraph agent (analyse → retrieve → plan → generate → self-check → traceability) | ✅ |
 | 6 | Evaluation suite (DeepEval + Ragas), agent vs. baseline report | ✅ |
 | 7 | Streamlit demo | ✅ |
-| 8 | Wrap-up: README results, optional CI quality gate | ⬜ |
+| 8 | Wrap-up: README results, optional CI quality gate | ✅ |
 
 ---
 
@@ -152,8 +152,16 @@ Run: `uv run streamlit run app.py`
 - Supporting changes: `run_agent(on_step=...)` streams steps (LangGraph `stream_mode="values"`); `evaluate_requirement()` and `update_reports()` merge per-requirement results; output and report folders are resolved at call time (overridable for tests).
 - `tests/test_app.py`: headless Streamlit `AppTest` with no outputs and with saved outputs (offline). Also rendered against the real R4 outputs with no exceptions.
 
-### Step 8: Wrap-up ⬜
-README run instructions + results summary; optional GitHub Actions `deepeval test run` quality gate.
+### Step 8: Wrap-up ✅
+- `README.md`: purpose, how the agent works, setup, run commands, evaluation metrics, preliminary R4 results, tests and CI, structure.
+- `evaluate.py --gate`: exits 1 when the agent misses an absolute threshold (AC coverage ≥ 0.8, faithfulness ≥ 0.85, golden scenario recall ≥ 0.8). Comparisons with the baseline are reported but do not block, because "coverage > baseline" cannot pass when both reach 100%.
+- `.github/workflows/ci.yml`: offline tests + data validation on every push/PR; a manual **Run workflow** job runs live generate + evaluate `--repeats 2 --gate` (default R3, R4, R6) using the `OPENAI_API_KEY` repository secret and uploads `reports/` and `outputs/`.
+- **Final offline test count: 60 pass; 3 live tests pass.**
+
+### Still to do (needs the user)
+1. Full run: `uv run python -m agentic_tcg.generate` then `uv run python -m agentic_tcg.evaluate --repeats 3`. Review `reports/comparison.md`, then commit `reports/`.
+2. Have a QA engineer or ratings specialist review `data/golden/`, since every score is measured against it.
+3. Optional: add the `OPENAI_API_KEY` repository secret to enable the manual CI quality gate.
 
 ---
 
@@ -178,3 +186,4 @@ README run instructions + results summary; optional GitHub Actions `deepeval tes
 | 2026-10-07 | **Success criteria extended** (originals kept): golden scenario recall ≥ 0.8 and above the baseline. Reason: AC coverage saturates at 100% for both modes, so it cannot tell them apart. |
 | 2026-10-07 | Judge variance observed: re-judging the same R4 outputs moved baseline faithfulness 0.92 → 0.53. Added `--repeats N` to average judgements; final numbers should use `--repeats 3`. |
 | 2026-10-06 | Step 7 completed. Uses `width="stretch"` instead of the deprecated `use_container_width`. |
+| 2026-10-06 | Step 8 completed. All steps done. The full R1-R8 evaluation with `--repeats 3` is left for the user to run and review. |

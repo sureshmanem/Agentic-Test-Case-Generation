@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      requirements:
+        description: "Requirements for the live quality gate (comma-separated, empty = all)"
+        required: false
+        default: "R3,R4,R6"
+
+jobs:
+  tests:
+    name: Offline tests and data validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - run: uv sync --locked
+      - run: uv run python scripts/validate_data.py
+      - run: uv run pytest -q
+
+  quality-gate:
+    name: Live generate + evaluate (quality gate)
+    # Manual only: calls OpenAI (needs the OPENAI_API_KEY repository secret)
+    if: github.event_name == 'workflow_dispatch'
+    needs: tests
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      REQS: ${{ inputs.requirements }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - run: uv sync --locked
+      - name: Generate (baseline and agent)
+        run: uv run python -m agentic_tcg.generate ${REQS:+-r "$REQS"}
+      - name: Evaluate and gate
+        run: uv run python -m agentic_tcg.evaluate --repeats 2 --gate ${REQS:+-r "$REQS"}
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: evaluation-report
+          path: |
+            reports/
+            outputs/

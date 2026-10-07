@@ -77,7 +77,7 @@ def test_report_compares_modes_and_checks_success_criteria():
     assert "| faithfulness | 0.70 | 0.90 | 0.20 | agent |" in report
     assert "| defect_rate (lower is better) | 0.30 | 0.10 | -0.20 | agent |" in report
     assert "| llm_calls (lower is better) | 1.00 | 5.00 | 4.00 | – |" in report
-    assert "Agent AC coverage ≥ 0.8 | ✅ pass" in report
+    assert "Agent AC coverage ≥ 0.8 ² | ✅ pass" in report
     assert "Agent faithfulness > baseline | ✅ pass" in report
     assert "| R4 | 0.80 → 1.00 |" in report
 
@@ -88,7 +88,7 @@ def test_report_lists_metric_errors():
     records = [evaluate_result(item("R1", mode=m), [broken]) for m in ("baseline", "agent")]
     report = build_report(records)
     assert "## Metric errors" in report and "RateLimitError" in report
-    assert "Agent faithfulness ≥ 0.85 | n/a" in report
+    assert "Agent faithfulness ≥ 0.85 ² | n/a" in report
 
 
 def test_record_score_lookup():
@@ -191,3 +191,16 @@ def test_update_reports_merges_by_requirement_and_mode(tmp_path, monkeypatch):
     assert [(r.requirement_id, r.mode, r.score("faithfulness")) for r in records] == [
         ("R2", "baseline", 0.5), ("R2", "agent", 0.9), ("R10", "agent", 0.1)]
     assert (tmp_path / "comparison.md").read_text().startswith("# Agent vs. Baseline")
+
+
+def test_gate():
+    from agentic_tcg.evaluate import gate_passed
+
+    def rec(mode, **scores):
+        return EvalRecord(requirement_id="R1", mode=mode, test_count=1, llm_calls=1, elapsed_seconds=1.0,
+                          metrics=[MetricScore(name=n, score=v) for n, v in scores.items()])
+    base = rec("baseline", ac_coverage=1.0, faithfulness=0.95, golden_scenario_recall=0.9)
+    # comparisons with the baseline do not block the gate, only absolute thresholds do
+    assert gate_passed([base, rec("agent", ac_coverage=1.0, faithfulness=0.9, golden_scenario_recall=0.85)])
+    assert not gate_passed([base, rec("agent", ac_coverage=1.0, faithfulness=0.80, golden_scenario_recall=0.85)])
+    assert not gate_passed([base])  # nothing measured for the agent
