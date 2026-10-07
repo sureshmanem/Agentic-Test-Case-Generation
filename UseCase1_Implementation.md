@@ -36,7 +36,7 @@ Status: ⬜ Not started · 🟡 In progress · ✅ Done
 | 1 | Synthetic ratings requirements, golden test sets, knowledge base | ✅ |
 | 2 | Project scaffold (dependencies, package layout, config, `.env.example`) | ✅ |
 | 3 | `TestCase` model + renderers (JSON/table, Gherkin, pytest) | ✅ |
-| 4 | Baseline single-prompt generator | ⬜ |
+| 4 | Baseline single-prompt generator | ✅ |
 | 5 | LangGraph agent (analyse → retrieve → plan → generate → self-check → traceability) | ⬜ |
 | 6 | Evaluation suite (DeepEval + Ragas), agent vs. baseline report | ⬜ |
 | 7 | Streamlit demo | ⬜ |
@@ -89,8 +89,11 @@ Traps built in to show the agent's value over a single prompt:
 - `src/agentic_tcg/renderers.py`: Markdown/table rows, Gherkin `.feature` (tags: test id, type, priority, AC ids), pytest skeletons (test data embedded; the call to the system under test is a TODO and the test skips until implemented).
 - `tests/test_models_renderers.py`: 29 offline tests. They check that the golden sets give 100% coverage, the generated pytest parses and runs, and the Gherkin has one scenario per test. **All pass.**
 
-### Step 4: Baseline ⬜
-Single `gpt-4.1` prompt: requirement → test cases (same schema).
+### Step 4: Baseline ✅
+- `src/agentic_tcg/llm.py`: `ChatOpenAI` factory, `invoke_structured()` (OpenAI `json_schema` strict mode), LLM-facing schemas (`LLMTestSuite`, `LLMTestCase` with `test_data_json`), conversion to domain models, id renumbering (`R1-TC01` and so on).
+- `src/agentic_tcg/prompts.py`: baseline prompt. It is a fair single prompt (asks for coverage, test types, concrete data and clarification questions), not a weak one.
+- `src/agentic_tcg/baseline.py`: `generate_baseline(requirement, llm)` makes **one LLM call** with the requirement only (plus the OpenAPI attachment for R8) and **no retrieval**.
+- `tests/fakes.py`: `FakeLLM` that mimics `with_structured_output().invoke()`. `tests/test_baseline.py`: strict-schema compatibility check (verified to reject a non-compliant schema), conversion, and a live test marked `llm` that is skipped without a key.
 
 ### Step 5: LangGraph Agent ⬜
 ```
@@ -125,3 +128,4 @@ README run instructions + results summary; optional GitHub Actions `deepeval tes
 | 2026-10-06 | Golden test case schema fixed (id, title, type, priority, preconditions, steps, test_data, expected_result, covers). Step 3's Pydantic `TestCase` will use the same shape. |
 | 2026-10-06 | Step 2 completed. Ragas 0.4.3 metrics are used through the new `ragas.metrics.collections` API (`llm_factory` + `ascore`), confirmed against the installed package. Offline unit tests with fake LLM/embeddings added to the plan, because the API key is only available after Step 8. |
 | 2026-10-06 | Step 3 completed. Generated pytest files are skeletons (data, steps and expected result embedded, with a TODO to call the system under test), because no real system under test exists in the prototype. |
+| 2026-10-06 | Step 4 completed. LLM output schemas are separate from the domain models: OpenAI strict mode forbids open `dict` fields, so `test_data` is returned as a JSON string and parsed. Schemas are checked against the OpenAI SDK `to_strict_json_schema` converter. |
