@@ -174,3 +174,20 @@ def test_average_records_over_repeats():
     assert avg.score("faithfulness") == pytest.approx(0.8)
     assert avg.metrics[0].error is None and avg.metrics[0].reason.startswith("mean of 2/3 run(s)")
     assert average_records([rec(None, "boom")]).metrics[0].error == "boom"
+
+
+def test_update_reports_merges_by_requirement_and_mode(tmp_path, monkeypatch):
+    from agentic_tcg import config
+    from agentic_tcg.evaluate import load_records, update_reports
+
+    monkeypatch.setattr(config, "REPORTS_DIR", tmp_path)
+
+    def rec(rid, mode, score):
+        return EvalRecord(requirement_id=rid, mode=mode, test_count=1, llm_calls=1, elapsed_seconds=1.0,
+                          metrics=[MetricScore(name="faithfulness", score=score)])
+    update_reports([rec("R10", "agent", 0.1), rec("R2", "baseline", 0.5), rec("R2", "agent", 0.6)])
+    update_reports([rec("R2", "agent", 0.9)])
+    records = load_records()
+    assert [(r.requirement_id, r.mode, r.score("faithfulness")) for r in records] == [
+        ("R2", "baseline", 0.5), ("R2", "agent", 0.9), ("R10", "agent", 0.1)]
+    assert (tmp_path / "comparison.md").read_text().startswith("# Agent vs. Baseline")

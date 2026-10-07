@@ -1,6 +1,7 @@
 """Run the baseline or the agent for a requirement, and save/load the results."""
 
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
@@ -9,7 +10,8 @@ from pydantic import BaseModel
 
 from agentic_tcg.agent import build_agent
 from agentic_tcg.baseline import generate_baseline
-from agentic_tcg.config import OUTPUTS_DIR, get_settings
+from agentic_tcg import config
+from agentic_tcg.config import get_settings
 from agentic_tcg.llm import StructuredLLM, get_chat_model
 from agentic_tcg.models import Requirement, TestSuite, load_requirement, save_json
 from agentic_tcg.renderers import to_gherkin, to_markdown_table, to_pytest, traceability_markdown
@@ -61,12 +63,22 @@ def run_baseline(requirement: Requirement, llm: StructuredLLM | None = None) -> 
 
 
 def run_agent(
-    requirement: Requirement, llm: StructuredLLM | None = None, kb: KnowledgeBase | None = None
+    requirement: Requirement,
+    llm: StructuredLLM | None = None,
+    kb: KnowledgeBase | None = None,
+    on_step: Callable[[dict[str, Any]], None] | None = None,
 ) -> GenerationResult:
+    """Run the agent graph. `on_step` receives each trace entry as soon as its node finishes."""
     counter = CountingLLM(llm or get_chat_model())
     start = time.perf_counter()
     graph = build_agent(counter, kb or KnowledgeBase())
-    state = graph.invoke({"requirement": requirement, "trace": []})
+    state: dict[str, Any] = {}
+    seen = 0
+    for state in graph.stream({"requirement": requirement, "trace": []}, stream_mode="values"):
+        for entry in state.get("trace", [])[seen:]:
+            if on_step:
+                on_step(entry)
+        seen = len(state.get("trace", []))
     return GenerationResult(
         mode="agent", requirement_id=requirement.id, model=get_settings().generation_model, suite=state["suite"],
         retrieved_contexts=[c.as_context() for c in state["chunks"]], trace=state["trace"],
@@ -75,11 +87,11 @@ def run_agent(
     )
 
 
-def result_dir(mode: Mode, root: Path = OUTPUTS_DIR) -> Path:
-    return root / mode
+def result_dir(mode: Mode, root: Path | None = None) -> Path:
+    return (root or config.OUTPUTS_DIR) / mode
 
 
-def save_result(result: GenerationResult, root: Path = OUTPUTS_DIR) -> Path:
+def save_result(result: GenerationResult, root: Path | None = None) -> Path:
     """Write the result JSON plus Gherkin, pytest, table and traceability renderings."""
     req = load_requirement(result.requirement_id)
     out = result_dir(result.mode, root)
@@ -98,6 +110,6 @@ def save_result(result: GenerationResult, root: Path = OUTPUTS_DIR) -> Path:
     return out / f"{rid}.json"
 
 
-def load_result(mode: Mode, requirement_id: str, root: Path = OUTPUTS_DIR) -> GenerationResult | None:
+def load_result(mode: Mode, requirement_id: str, root: Path | None = None) -> GenerationResult | None:
     path = result_dir(mode, root) / f"{requirement_id}.json"
     return GenerationResult.model_validate_json(path.read_text()) if path.exists() else None

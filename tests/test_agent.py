@@ -190,3 +190,9 @@ def test_agent_live_openai():
     result = run_agent(req)
     assert result.suite.test_cases
     assert build_traceability(req, result.suite).coverage >= 0.8
+
+
+def test_run_agent_streams_each_step(kb):
+    steps = []
+    result = run_agent(load_requirement("R4"), llm=FakeLLM(ScriptedR4()), kb=kb, on_step=lambda e: steps.append(e["step"]))
+    assert steps == [t["step"] for t in result.trace]

@@ -4,8 +4,8 @@
     uv run python -m agentic_tcg.evaluate -r R4,R6 --no-ragas
     uv run python -m agentic_tcg.evaluate --repeats 3       # average 3 judgements per output
 
-Reads outputs/<mode>/<R>.json (from `agentic_tcg.generate`) and writes
-reports/results.json and reports/comparison.md.
+Reads outputs/<mode>/<R>.json (from `agentic_tcg.generate`). Results are merged into
+reports/results.json (same requirement + mode replaced) and reports/comparison.md is rebuilt.
 """
 
 import argparse
@@ -19,7 +19,8 @@ from statistics import mean
 
 from pydantic import BaseModel, Field
 
-from agentic_tcg.config import REPORTS_DIR, get_settings
+from agentic_tcg import config
+from agentic_tcg.config import get_settings
 from agentic_tcg.llm import StructuredLLM, get_chat_model, invoke_structured
 from agentic_tcg.models import GoldenSet, Requirement, TestSuite, load_golden, load_knowledge_docs, load_requirement, load_requirements
 from agentic_tcg.pipeline import MODES, GenerationResult, Mode, load_result
@@ -395,6 +396,44 @@ def build_report(records: list[EvalRecord]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def default_judges(deepeval: bool = True, ragas: bool = True) -> list[Judge]:
+    judges: list[Judge] = []
+    if deepeval:
+        judges += [verdict_judge(), deepeval_judge()]
+    if ragas:
+        judges.append(ragas_judge())
+    return judges
+
+
+def evaluate_requirement(requirement: Requirement, judges: list[Judge], repeats: int = 1) -> list[EvalRecord]:
+    """Evaluate the saved baseline and agent outputs of one requirement (missing outputs are skipped)."""
+    golden = load_golden(requirement.id)
+    records = []
+    for mode in MODES:
+        result = load_result(mode, requirement.id)
+        if result is None:
+            continue
+        item = EvalInput(requirement=requirement, golden=golden, result=result)
+        records.append(average_records([evaluate_result(item, judges) for _ in range(max(1, repeats))]))
+    return records
+
+
+def load_records() -> list[EvalRecord]:
+    path = config.REPORTS_DIR / "results.json"
+    return [EvalRecord.model_validate(r) for r in json.loads(path.read_text())] if path.exists() else []
+
+
+def update_reports(new: list[EvalRecord]) -> list[EvalRecord]:
+    """Merge records into reports/results.json (replacing the same requirement+mode) and rebuild comparison.md."""
+    keys = {(r.requirement_id, r.mode) for r in new}
+    records = [r for r in load_records() if (r.requirement_id, r.mode) not in keys] + new
+    records.sort(key=lambda r: (int(r.requirement_id[1:]), MODES.index(r.mode)))
+    config.REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    (config.REPORTS_DIR / "results.json").write_text(json.dumps([r.model_dump() for r in records], indent=2) + "\n")
+    (config.REPORTS_DIR / "comparison.md").write_text(build_report(records))
+    return records
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("-r", "--requirements", help="Comma-separated ids (default: all)")
@@ -408,33 +447,21 @@ def main(argv: list[str] | None = None) -> int:
               "for deterministic metrics only.", file=sys.stderr)
         return 2
 
-    judges: list[Judge] = []
-    if not args.no_deepeval:
-        judges += [verdict_judge(), deepeval_judge()]
-    if not args.no_ragas:
-        judges.append(ragas_judge())
-
+    judges = default_judges(deepeval=not args.no_deepeval, ragas=not args.no_ragas)
     reqs = [load_requirement(r.strip()) for r in args.requirements.split(",")] if args.requirements else load_requirements()
     records = []
     for req in reqs:
-        golden = load_golden(req.id)
-        for mode in MODES:
-            result = load_result(mode, req.id)
-            if result is None:
-                print(f"skip {req.id} {mode}: no output (run agentic_tcg.generate first)", file=sys.stderr)
-                continue
-            print(f"evaluating {req.id} {mode} ...", file=sys.stderr)
-            item = EvalInput(requirement=req, golden=golden, result=result)
-            records.append(average_records([evaluate_result(item, judges) for _ in range(max(1, args.repeats))]))
+        print(f"evaluating {req.id} ...", file=sys.stderr)
+        found = evaluate_requirement(req, judges, repeats=args.repeats)
+        if not found:
+            print(f"skip {req.id}: no outputs (run agentic_tcg.generate first)", file=sys.stderr)
+        records += found
     if not records:
         print("Nothing to evaluate.", file=sys.stderr)
         return 1
 
-    report = build_report(records)
-    REPORTS_DIR.mkdir(exist_ok=True)
-    (REPORTS_DIR / "results.json").write_text(json.dumps([r.model_dump() for r in records], indent=2) + "\n")
-    (REPORTS_DIR / "comparison.md").write_text(report)
-    print(report)
+    all_records = update_reports(records)
+    print(build_report(all_records))
     return 0
 
 

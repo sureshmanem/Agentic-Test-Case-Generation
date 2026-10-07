@@ -39,7 +39,7 @@ Status: ⬜ Not started · 🟡 In progress · ✅ Done
 | 4 | Baseline single-prompt generator | ✅ |
 | 5 | LangGraph agent (analyse → retrieve → plan → generate → self-check → traceability) | ✅ |
 | 6 | Evaluation suite (DeepEval + Ragas), agent vs. baseline report | ✅ |
-| 7 | Streamlit demo | ⬜ |
+| 7 | Streamlit demo | ✅ |
 | 8 | Wrap-up: README results, optional CI quality gate | ⬜ |
 
 ---
@@ -143,8 +143,14 @@ Judge model: `gpt-4.1-mini`. Success criteria: agent AC coverage ≥ 0.8, faithf
 
 Tests: `tests/test_evaluate.py` (deterministic metrics, verdict counting, report and criteria, repeats, offline judge construction); live tests with `uv run pytest -m llm`. **55 offline + 3 live pass.**
 
-### Step 7: Streamlit Demo ⬜
-Pick a requirement → generated tests (table / Gherkin / pytest) → traceability matrix → agent trace → scores vs. baseline.
+### Step 7: Streamlit Demo ✅
+Run: `uv run streamlit run app.py`
+
+- **Sidebar:** pick a requirement; **Baseline** / **Agent** buttons generate live (the agent shows each step as it finishes); **Evaluate both** runs all judges for that requirement and merges the result into `reports/`. Buttons are disabled without an API key; saved outputs still display.
+- **Header:** agent vs. baseline tests, AC coverage, LLM calls and time.
+- **Tabs:** Requirement (story, ACs, OpenAPI attachment) · Test cases (table / Gherkin / pytest / clarification questions, with downloads) · Traceability (side by side) · Agent trace (graph diagram, each step with detail, retrieved chunks) · Evaluation (metric table baseline vs. agent with Δ, judge reasons, full report) · Golden set.
+- Supporting changes: `run_agent(on_step=...)` streams steps (LangGraph `stream_mode="values"`); `evaluate_requirement()` and `update_reports()` merge per-requirement results; output and report folders are resolved at call time (overridable for tests).
+- `tests/test_app.py`: headless Streamlit `AppTest` with no outputs and with saved outputs (offline). Also rendered against the real R4 outputs with no exceptions.
 
 ### Step 8: Wrap-up ⬜
 README run instructions + results summary; optional GitHub Actions `deepeval test run` quality gate.
@@ -171,3 +177,4 @@ README run instructions + results summary; optional GitHub Actions `deepeval tes
 | 2026-10-07 | Removed the literal `untestable_ac_flagged` check (it missed concerns raised without the AC id); `ambiguity_detection` covers it. |
 | 2026-10-07 | **Success criteria extended** (originals kept): golden scenario recall ≥ 0.8 and above the baseline. Reason: AC coverage saturates at 100% for both modes, so it cannot tell them apart. |
 | 2026-10-07 | Judge variance observed: re-judging the same R4 outputs moved baseline faithfulness 0.92 → 0.53. Added `--repeats N` to average judgements; final numbers should use `--repeats 3`. |
+| 2026-10-06 | Step 7 completed. Uses `width="stretch"` instead of the deprecated `use_container_width`. |

@@ -11,10 +11,11 @@ DATA_DIR = ROOT / "data"
 REQUIREMENTS_DIR = DATA_DIR / "requirements"
 GOLDEN_DIR = DATA_DIR / "golden"
 KNOWLEDGE_DIR = DATA_DIR / "knowledge"
-OUTPUTS_DIR = ROOT / "outputs"
-REPORTS_DIR = ROOT / "reports"
-
 load_dotenv(ROOT / ".env")
+
+# Overridable so tests and demos can use scratch folders
+OUTPUTS_DIR = Path(os.getenv("AGENTIC_TCG_OUTPUTS_DIR") or ROOT / "outputs")
+REPORTS_DIR = Path(os.getenv("AGENTIC_TCG_REPORTS_DIR") or ROOT / "reports")
 
 
 def _env(name: str, default: str) -> str:
